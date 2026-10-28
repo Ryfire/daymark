@@ -1,0 +1,30 @@
+name: daymark
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  drift: ^2.35.3
+  drift_flutter: ^0.3.1
+  file_picker: ^13.3.0
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^3.4.3
+  flutter_tts: ^4.2.5
+  http: ^1.6.0
+  path_provider: ^2.1.6
+  sqlite3_flutter_libs: ^0.6.0+eol
+  uuid: ^4.6.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  drift_dev: ^2.35.2
+  build_runner: ^2.17.1
+
+flutter:
+  uses-material-design: true
