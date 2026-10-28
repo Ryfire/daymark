@@ -6,9 +6,7 @@ turns your exported note backups into answers.
 JotLock is the capture half: fast, offline, lock-screen-first note taking.
 Daymark is the processing half: it imports JotLock's JSON backups, keeps a
 read-only timeline of them, and lets you interrogate your own notes with an
-LLM you choose and host. The name is what sailors call the fixed signpost
-that tells you where you are in the daytime — this app is the marker that
-orients you inside your own stream of jotted thoughts.
+LLM you choose and host.
 
 ## What it does
 
@@ -52,16 +50,27 @@ Requires Flutter 3.47+ (Android target).
 
 ## Provider setup
 
-Point Daymark at any OpenAI-compatible API root (usually ending in `/v1`):
+Daymark speaks the OpenAI-compatible API dialect — `POST /v1/chat/completions`
+and `GET /v1/models` — so it works with any server or service that implements
+it. Enter the API root as the Base URL, add an API key if the endpoint needs
+one, then **Fetch** to list models, pick one, **Save**, and **Test
+connection**.
 
-- **Ollama**: `http://<your-host>:11434/v1`
-- **LM Studio**: `http://<your-host>:1237/v1` (or wherever its server runs)
-- **Cloud**: any OpenAI-compatible gateway URL + your API key
+**Self-hosted (no API key needed)**
 
-Then **Fetch** to list models, pick one, **Save**, and **Test connection**.
-Self-hosted LAN endpoints over plain HTTP are supported (Android cleartext
-is enabled for this reason); if connections time out, your firewall is
-dropping inbound traffic to the server's port.
+- **Ollama**: `http://<host>:11434/v1`
+- **LM Studio**: `http://<host>:1237/v1` (or wherever its server runs)
+- **llama.cpp server**: `http://<host>:8080/v1`
+
+**Hosted (API key required)**
+
+- **OpenRouter**: `https://openrouter.ai/api/v1`
+- **OpenAI**: `https://api.openai.com/v1`
+- Anything else exposing the OpenAI shape (vLLM, LiteLLM, Azure gateways...)
+
+LAN endpoints over plain HTTP are supported (Android cleartext is enabled
+for this reason); if connections time out, your firewall is dropping inbound
+traffic to the server's port.
 
 ## Roadmap
 
