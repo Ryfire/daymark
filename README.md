@@ -1,7 +1,8 @@
 # Daymark
 
-A local-first companion to [JotLock](https://github.com/Ryfire/jotlock) that
-turns your exported note backups into answers.
+A companion app to [JotLock](https://github.com/Ryfire/jotlock) that turns
+your exported note backups into answers. It runs entirely on your device;
+you bring the LLM.
 
 JotLock is the capture half: fast, offline, lock-screen-first note taking.
 Daymark is the processing half: it imports JotLock's JSON backups, keeps a
