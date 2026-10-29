@@ -4,7 +4,7 @@ import 'package:daymark/db/database.dart';
 import 'package:daymark/llm/grounding.dart';
 
 NoteRow note(String id, String content, int createdAt,
-        {bool pinned = false}) =>
+        {bool pinned = false, bool done = false}) =>
     NoteRow(
       id: id,
       content: content,
@@ -14,7 +14,7 @@ NoteRow note(String id, String content, int createdAt,
       reminderAt: 0,
       reminderSilent: false,
       repeatDays: 0,
-      done: false,
+      done: done,
       editedAt: 0,
       source: 'jotlock_json',
       batchId: 'batch1',
@@ -77,6 +77,31 @@ void main() {
       expect(selection.isTruncated, isFalse);
     });
 
+    test('doneness queries match notes marked done', () {
+      final selection = selectContext(
+        [
+          note('plain', 'random chatter about weather', 3000),
+          note('dentist', "emma's dentist checkup", 2000, done: true),
+          note('open', 'buy milk tomorrow', 1000),
+        ],
+        'are there any notes that are done, if so list them',
+      );
+
+      expect(selection.notes.map((n) => n.note.id), ['dentist']);
+    });
+
+    test('fully checked checklists count as done, partial ones do not', () {
+      final selection = selectContext(
+        [
+          note('full', 'errands\n[x] milk\n[x] eggs', 2000),
+          note('partial', 'errands\n[x] milk\n[ ] eggs', 1000),
+        ],
+        'what is done',
+      );
+
+      expect(selection.notes.map((n) => n.note.id), ['full']);
+    });
+
     test('char budget truncates by relevance and flags it', () {
       final selection = selectContext(
         [
@@ -134,6 +159,19 @@ void main() {
       expect(prompt, contains('Today is Wed, Oct 28, 2026 · 14:00'));
       expect(prompt, contains('Resolve relative day names'));
       expect(prompt, contains('timestamped on that day'));
+    });
+
+    test('marks done notes in the prompt block', () {
+      final selection = selectContext([
+        note('old', 'emma dentist checkup', 1000, done: true),
+        note('new', 'buy milk', 2000),
+      ], '');
+
+      final prompt = buildGroundedSystemPrompt(selection);
+
+      expect(prompt, contains('completed in JotLock'));
+      expect(prompt, contains('(done): emma dentist checkup'));
+      expect(prompt, isNot(contains('(done): buy milk')));
     });
 
     test('includes reminder metadata for one-shot reminders', () {

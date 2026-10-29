@@ -12,19 +12,26 @@ class ImportReport {
   final int alreadyPresent;
   final int malformed;
 
+  /// Existing notes whose done flag was refreshed from the (newer) backup.
+  /// Content is never touched on re-import, so Daymark-side rewrites and
+  /// reverts survive.
+  final int updated;
+
   const ImportReport({
     required this.batchId,
     required this.added,
     required this.alreadyPresent,
     required this.malformed,
+    this.updated = 0,
   });
 
   bool get addedAnything => added > 0;
 }
 
 /// Parses [raw] (a jotlock JSON backup) and merges it into [db]. Notes
-/// whose id already exists are skipped — the same merge rule jotlock's own
-/// import uses — so re-sharing a newer backup only adds what is new.
+/// whose id already exists keep their content — the same merge rule
+/// jotlock's own import uses — so re-sharing a newer backup only adds
+/// what is new; their done flag, however, is refreshed from the backup.
 /// Every run records an [ImportBatches] row, even a no-op one.
 Future<ImportReport> importJotlockBackup(
   AppDatabase db,
@@ -35,19 +42,27 @@ Future<ImportReport> importJotlockBackup(
   final batchId = const Uuid().v4();
   final now = DateTime.now().millisecondsSinceEpoch;
 
-  final existing = {
-    for (final row in await db.select(db.notes).get()) row.id,
+  final existing = <String, NoteRow?>{
+    for (final row in await db.select(db.notes).get()) row.id: row,
   };
 
   var added = 0;
   var alreadyPresent = 0;
+  final donenessRefreshes = <MapEntry<String, bool>>[];
   await db.batch((b) {
     for (final note in parsed.notes) {
-      if (existing.contains(note.id)) {
+      // Map values: the db row, or null once the id was seen in this file —
+      // key presence means "already handled", the row itself enables the
+      // doneness refresh.
+      final known = existing[note.id];
+      if (existing.containsKey(note.id)) {
         alreadyPresent++;
+        if (known != null && known.done != note.done) {
+          donenessRefreshes.add(MapEntry(note.id, note.done));
+        }
         continue;
       }
-      existing.add(note.id);
+      existing[note.id] = null;
       added++;
       b.insert(
         db.notes,
@@ -69,6 +84,11 @@ Future<ImportReport> importJotlockBackup(
     }
   });
 
+  for (final refresh in donenessRefreshes) {
+    await (db.update(db.notes)..where((tbl) => tbl.id.equals(refresh.key)))
+        .write(NotesCompanion(done: Value(refresh.value)));
+  }
+
   await db.into(db.importBatches).insert(
         ImportBatchesCompanion.insert(
           id: batchId,
@@ -85,6 +105,7 @@ Future<ImportReport> importJotlockBackup(
     added: added,
     alreadyPresent: alreadyPresent,
     malformed: parsed.malformed,
+    updated: donenessRefreshes.length,
   );
 }
 
@@ -93,6 +114,7 @@ String describeImportReport(ImportReport report) {
   final parts = <String>[
     if (report.added > 0)
       'Imported ${report.added} note${report.added == 1 ? '' : 's'}',
+    if (report.updated > 0) 'Updated ${report.updated}',
     if (report.alreadyPresent > 0)
       '${report.alreadyPresent} already present',
     if (report.malformed > 0) '${report.malformed} skipped',

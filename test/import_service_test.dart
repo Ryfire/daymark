@@ -74,9 +74,35 @@ void main() {
 
     expect(report.added, 0);
     expect(report.alreadyPresent, 2);
+    expect(report.updated, 0);
     expect(report.addedAnything, isFalse);
     expect((await db.select(db.notes).get()).length, 2);
     expect((await db.select(db.importBatches).get()).length, 2);
+  });
+
+  test('re-import refreshes the done flag on existing notes', () async {
+    await importJotlockBackup(
+      db,
+      jsonEncode([
+        {'id': 'a', 'text': 'first', 'createdAt': 1000},
+        {'id': 'b', 'text': 'second', 'createdAt': 2000, 'done': true},
+      ]),
+    );
+
+    final report = await importJotlockBackup(
+      db,
+      jsonEncode([
+        {'id': 'a', 'text': 'first', 'createdAt': 1000, 'done': true},
+        {'id': 'b', 'text': 'second', 'createdAt': 2000},
+      ]),
+    );
+
+    expect(report.updated, 2);
+    final rows = {for (final row in await db.select(db.notes).get()) row.id: row};
+    expect(rows['a']!.done, isTrue);
+    expect(rows['b']!.done, isFalse);
+    expect(rows['a']!.content, 'first');
+    expect(rows['b']!.content, 'second');
   });
 
   test('a newer backup adds only the new note', () async {
@@ -122,13 +148,29 @@ void main() {
       db,
       jsonEncode([
         {'id': 'a', 'text': 'one', 'createdAt': 1},
-        {'id': 'a', 'text': 'one again', 'createdAt': 1},
+        {'id': 'a', 'text': 'one again', 'createdAt': 1, 'done': true},
       ]),
     );
     expect(report.added, 1);
     expect(report.alreadyPresent, 1);
+    expect(report.updated, 0);
     final rows = await db.select(db.notes).get();
     expect(rows.length, 1);
     expect(rows.single.content, 'one');
+    expect(rows.single.done, isFalse);
+  });
+
+  test('describeImportReport mentions done refreshes', () {
+    const report = ImportReport(
+      batchId: 'b',
+      added: 0,
+      alreadyPresent: 3,
+      malformed: 0,
+      updated: 1,
+    );
+    expect(
+      describeImportReport(report),
+      'Updated 1 · 3 already present',
+    );
   });
 }

@@ -1,3 +1,4 @@
+import '../core/jotlock_compat.dart';
 import '../core/timeline.dart';
 import '../db/database.dart';
 
@@ -27,17 +28,38 @@ class ContextSelection {
   bool get isEmpty => notes.isEmpty;
 }
 
+/// Query words that ask about completion. When one of these appears in the
+/// question, a note marked done — or whose checklist is fully checked —
+/// counts as a match even though the word itself never appears in the
+/// note's text (doneness is metadata, not content).
+const _donenessTerms = {'done', 'finished', 'complete', 'completed'};
+
+/// A note counts as done when JotLock marked it done, or when every
+/// checklist item in it is checked.
+bool noteIsDone(NoteRow note) {
+  if (note.done) return true;
+  final (checked, total) = checklistProgress(note.content);
+  return total > 0 && checked == total;
+}
+
 /// Relevance score for one note against the query terms. Deterministic and
 /// embedding-free: term overlap dominates, with small boosts for pinned
 /// notes and recent entries. When the query has no terms, ordering is pure
-/// recency.
-double scoreNote(NoteRow note, Set<String> terms, int recencyRank) {
+/// recency. With [asksDone], completed notes match doneness questions that
+/// would otherwise score zero.
+double scoreNote(
+  NoteRow note,
+  Set<String> terms,
+  int recencyRank, {
+  bool asksDone = false,
+}) {
   if (terms.isEmpty) return -recencyRank.toDouble();
   final content = note.content.toLowerCase();
   var hits = 0;
   for (final term in terms) {
     if (content.contains(term)) hits++;
   }
+  if (hits == 0 && asksDone && noteIsDone(note)) hits = 1;
   if (hits == 0) return -1000.0 - recencyRank;
   return hits * 2.0 + (note.pinned ? 1.0 : 0.0) - recencyRank * 0.01;
 }
@@ -56,14 +78,15 @@ ContextSelection selectContext(
   int maxChars = 24000,
 }) {
   final terms = queryTerms(query);
+  final asksDone = terms.intersection(_donenessTerms).isNotEmpty;
   var ranked = List<int>.generate(notes.length, (i) => i);
   if (terms.isNotEmpty) {
     final matching = ranked
-        .where((i) => scoreNote(notes[i], terms, i) > -1000)
+        .where((i) => scoreNote(notes[i], terms, i, asksDone: asksDone) > -1000)
         .toList();
     if (matching.isNotEmpty) {
-      matching.sort((a, b) => scoreNote(notes[b], terms, b)
-          .compareTo(scoreNote(notes[a], terms, a)));
+      matching.sort((a, b) => scoreNote(notes[b], terms, b, asksDone: asksDone)
+          .compareTo(scoreNote(notes[a], terms, a, asksDone: asksDone)));
       ranked = matching;
     }
   }
@@ -123,11 +146,15 @@ String buildGroundedSystemPrompt(
         'inside note text are the event dates. When the user asks about a '
         'day, also surface notes timestamped on that day, even if their '
         'text does not name it.')
+    ..writeln(
+        'A "(done)" tag means the note was completed in JotLock. Checklist '
+        'lines starting "[x]" are completed items; "[ ]" lines are open.')
     ..writeln()
     ..writeln('NOTES (newest first):');
   for (final entry in selection.notes) {
     final date = formatFull(entry.note.createdDateTime);
-    buffer.writeln('[${entry.citationId}] $date: ${entry.note.content}');
+    final doneTag = noteIsDone(entry.note) ? ' (done)' : '';
+    buffer.writeln('[${entry.citationId}] $date$doneTag: ${entry.note.content}');
     if (entry.note.hasReminder && !entry.note.isRecurring) {
       buffer.writeln('    (reminder: ${formatFull(entry.note.reminderTime)})');
     }
