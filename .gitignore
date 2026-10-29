@@ -54,5 +54,8 @@ jotlock_backup_*.txt
 # Local dev environment — not part of the public release
 scripts/dev.ps1
 
+# Regeneratable icon previews (tool/make_icon.py output)
+tool/out/
+
 # Distribution/packaging notes
 obtainium.txt

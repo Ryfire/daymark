@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Daymark: dog-eared note sheet with a round-capped d, on the teal gradient. Geometry lives in a
+         1024x1024 design space; the group maps it into the 108dp viewport
+         and keeps it inside the 66dp safe zone. Regenerate by running
+         tool/make_icon.py with the finalize flag and mark "sheet". -->
+    <group
+        android:scaleX="0.084561"
+        android:scaleY="0.084561"
+        android:translateX="10.10"
+        android:translateY="12.06">
+        <path
+            android:fillColor="#FFF7F4EC"
+            android:pathData="M356,240 H592 L712,360 V740 A44,44 0 0 1 668,784 H356 A44,44 0 0 1 312,740 V284 A44,44 0 0 1 356,240 Z" />
+        <!-- pencil resting in the notch -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M628.02,207.98 L710.05,290 L726.31,330.31 L686,314.05 L603.98,232.02 Z" />
+        <!-- folded flap -->
+        <path
+            android:fillColor="#FFDDD7CB"
+            android:pathData="M592,240 L712,360 L592,360 Z" />
+        <!-- lowercase d -->
+        <path
+            android:strokeColor="#FF00796B"
+            android:strokeWidth="64"
+            android:strokeLineCap="round"
+            android:pathData="M378,584 A74,74 0 1 0 526,584 A74,74 0 1 0 378,584" />
+        <path
+            android:strokeColor="#FF00796B"
+            android:strokeWidth="64"
+            android:strokeLineCap="round"
+            android:pathData="M558,408 L558,668" />
+    </group>
+</vector>
