@@ -101,12 +101,28 @@ Set<String> queryTerms(String query) {
 }
 
 /// Builds the system prompt that grounds the model in the selected notes.
-String buildGroundedSystemPrompt(ContextSelection selection) {
+///
+/// [now] anchors the prompt in the present so relative day names resolve:
+/// without it the model cannot tell whether "Thursday" means last week,
+/// this week or the upcoming one. Defaults to the current local time.
+String buildGroundedSystemPrompt(
+  ContextSelection selection, {
+  DateTime? now,
+}) {
+  final today = now ?? DateTime.now();
   final buffer = StringBuffer()
     ..writeln(
         'You are helping the user with their personal notes from JotLock, '
         'a minimal notes app. The notes are raw thoughts: typos, shorthand '
         'and unfinished checklist lines are normal.')
+    ..writeln()
+    ..writeln('Today is ${formatFull(today)}.')
+    ..writeln(
+        'Resolve relative day names (today, tomorrow, "Thursday") against '
+        'today. A [nX] timestamp is when the note was written; day names '
+        'inside note text are the event dates. When the user asks about a '
+        'day, also surface notes timestamped on that day, even if their '
+        'text does not name it.')
     ..writeln()
     ..writeln('NOTES (newest first):');
   for (final entry in selection.notes) {

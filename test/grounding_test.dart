@@ -15,6 +15,7 @@ NoteRow note(String id, String content, int createdAt,
       reminderSilent: false,
       repeatDays: 0,
       done: false,
+      editedAt: 0,
       source: 'jotlock_json',
       batchId: 'batch1',
       importedAt: 1,
@@ -120,6 +121,21 @@ void main() {
       expect(prompt, contains('Cite the notes'));
     });
 
+    test('anchors the current date so relative day names resolve', () {
+      final selection = selectContext([
+        note('a', 'costco run', 1792076158075),
+      ], '');
+
+      final prompt = buildGroundedSystemPrompt(
+        selection,
+        now: DateTime(2026, 10, 28, 14),
+      );
+
+      expect(prompt, contains('Today is Wed, Oct 28, 2026 · 14:00'));
+      expect(prompt, contains('Resolve relative day names'));
+      expect(prompt, contains('timestamped on that day'));
+    });
+
     test('includes reminder metadata for one-shot reminders', () {
       final prompt = buildGroundedSystemPrompt(
         ContextSelection(
@@ -136,6 +152,7 @@ void main() {
                 reminderSilent: false,
                 repeatDays: 0,
                 done: false,
+                editedAt: 0,
                 source: 'jotlock_json',
                 batchId: 'b',
                 importedAt: 1,
