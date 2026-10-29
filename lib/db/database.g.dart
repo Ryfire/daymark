@@ -116,6 +116,29 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, NoteRow> {
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _editedAtMeta = const VerificationMeta(
+    'editedAt',
+  );
+  @override
+  late final GeneratedColumn<int> editedAt = GeneratedColumn<int>(
+    'edited_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _originalContentMeta = const VerificationMeta(
+    'originalContent',
+  );
+  @override
+  late final GeneratedColumn<String> originalContent = GeneratedColumn<String>(
+    'original_content',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sourceMeta = const VerificationMeta('source');
   @override
   late final GeneratedColumn<String> source = GeneratedColumn<String>(
@@ -158,6 +181,8 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, NoteRow> {
     reminderSilent,
     repeatDays,
     done,
+    editedAt,
+    originalContent,
     source,
     batchId,
     importedAt,
@@ -234,6 +259,21 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, NoteRow> {
         done.isAcceptableOrUnknown(data['done']!, _doneMeta),
       );
     }
+    if (data.containsKey('edited_at')) {
+      context.handle(
+        _editedAtMeta,
+        editedAt.isAcceptableOrUnknown(data['edited_at']!, _editedAtMeta),
+      );
+    }
+    if (data.containsKey('original_content')) {
+      context.handle(
+        _originalContentMeta,
+        originalContent.isAcceptableOrUnknown(
+          data['original_content']!,
+          _originalContentMeta,
+        ),
+      );
+    }
     if (data.containsKey('source')) {
       context.handle(
         _sourceMeta,
@@ -303,6 +343,14 @@ class $NotesTable extends Notes with TableInfo<$NotesTable, NoteRow> {
         DriftSqlType.bool,
         data['${effectivePrefix}done'],
       )!,
+      editedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}edited_at'],
+      )!,
+      originalContent: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}original_content'],
+      ),
       source: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}source'],
@@ -335,7 +383,14 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
   final int repeatDays;
   final bool done;
 
-  /// Where the row came from ('jotlock_json' for now; more sources later).
+  /// Quick-rewrite provenance: when > 0 the note was replaced by a
+  /// rewritten version, and [originalContent] holds the text before that
+  /// edit (single-level undo; the true original stays in jotlock).
+  final int editedAt;
+  final String? originalContent;
+
+  /// Where the row came from ('jotlock_json' for imports, 'daymark_ai'
+  /// for notes created in-app); more sources later.
   final String source;
   final String batchId;
   final int importedAt;
@@ -349,6 +404,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     required this.reminderSilent,
     required this.repeatDays,
     required this.done,
+    required this.editedAt,
+    this.originalContent,
     required this.source,
     required this.batchId,
     required this.importedAt,
@@ -365,6 +422,10 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     map['reminder_silent'] = Variable<bool>(reminderSilent);
     map['repeat_days'] = Variable<int>(repeatDays);
     map['done'] = Variable<bool>(done);
+    map['edited_at'] = Variable<int>(editedAt);
+    if (!nullToAbsent || originalContent != null) {
+      map['original_content'] = Variable<String>(originalContent);
+    }
     map['source'] = Variable<String>(source);
     map['batch_id'] = Variable<String>(batchId);
     map['imported_at'] = Variable<int>(importedAt);
@@ -382,6 +443,10 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
       reminderSilent: Value(reminderSilent),
       repeatDays: Value(repeatDays),
       done: Value(done),
+      editedAt: Value(editedAt),
+      originalContent: originalContent == null && nullToAbsent
+          ? const Value.absent()
+          : Value(originalContent),
       source: Value(source),
       batchId: Value(batchId),
       importedAt: Value(importedAt),
@@ -403,6 +468,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
       reminderSilent: serializer.fromJson<bool>(json['reminderSilent']),
       repeatDays: serializer.fromJson<int>(json['repeatDays']),
       done: serializer.fromJson<bool>(json['done']),
+      editedAt: serializer.fromJson<int>(json['editedAt']),
+      originalContent: serializer.fromJson<String?>(json['originalContent']),
       source: serializer.fromJson<String>(json['source']),
       batchId: serializer.fromJson<String>(json['batchId']),
       importedAt: serializer.fromJson<int>(json['importedAt']),
@@ -421,6 +488,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
       'reminderSilent': serializer.toJson<bool>(reminderSilent),
       'repeatDays': serializer.toJson<int>(repeatDays),
       'done': serializer.toJson<bool>(done),
+      'editedAt': serializer.toJson<int>(editedAt),
+      'originalContent': serializer.toJson<String?>(originalContent),
       'source': serializer.toJson<String>(source),
       'batchId': serializer.toJson<String>(batchId),
       'importedAt': serializer.toJson<int>(importedAt),
@@ -437,6 +506,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     bool? reminderSilent,
     int? repeatDays,
     bool? done,
+    int? editedAt,
+    Value<String?> originalContent = const Value.absent(),
     String? source,
     String? batchId,
     int? importedAt,
@@ -450,6 +521,10 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     reminderSilent: reminderSilent ?? this.reminderSilent,
     repeatDays: repeatDays ?? this.repeatDays,
     done: done ?? this.done,
+    editedAt: editedAt ?? this.editedAt,
+    originalContent: originalContent.present
+        ? originalContent.value
+        : this.originalContent,
     source: source ?? this.source,
     batchId: batchId ?? this.batchId,
     importedAt: importedAt ?? this.importedAt,
@@ -473,6 +548,10 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
           ? data.repeatDays.value
           : this.repeatDays,
       done: data.done.present ? data.done.value : this.done,
+      editedAt: data.editedAt.present ? data.editedAt.value : this.editedAt,
+      originalContent: data.originalContent.present
+          ? data.originalContent.value
+          : this.originalContent,
       source: data.source.present ? data.source.value : this.source,
       batchId: data.batchId.present ? data.batchId.value : this.batchId,
       importedAt: data.importedAt.present
@@ -493,6 +572,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
           ..write('reminderSilent: $reminderSilent, ')
           ..write('repeatDays: $repeatDays, ')
           ..write('done: $done, ')
+          ..write('editedAt: $editedAt, ')
+          ..write('originalContent: $originalContent, ')
           ..write('source: $source, ')
           ..write('batchId: $batchId, ')
           ..write('importedAt: $importedAt')
@@ -511,6 +592,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
     reminderSilent,
     repeatDays,
     done,
+    editedAt,
+    originalContent,
     source,
     batchId,
     importedAt,
@@ -528,6 +611,8 @@ class NoteRow extends DataClass implements Insertable<NoteRow> {
           other.reminderSilent == this.reminderSilent &&
           other.repeatDays == this.repeatDays &&
           other.done == this.done &&
+          other.editedAt == this.editedAt &&
+          other.originalContent == this.originalContent &&
           other.source == this.source &&
           other.batchId == this.batchId &&
           other.importedAt == this.importedAt);
@@ -543,6 +628,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
   final Value<bool> reminderSilent;
   final Value<int> repeatDays;
   final Value<bool> done;
+  final Value<int> editedAt;
+  final Value<String?> originalContent;
   final Value<String> source;
   final Value<String> batchId;
   final Value<int> importedAt;
@@ -557,6 +644,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
     this.reminderSilent = const Value.absent(),
     this.repeatDays = const Value.absent(),
     this.done = const Value.absent(),
+    this.editedAt = const Value.absent(),
+    this.originalContent = const Value.absent(),
     this.source = const Value.absent(),
     this.batchId = const Value.absent(),
     this.importedAt = const Value.absent(),
@@ -572,6 +661,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
     this.reminderSilent = const Value.absent(),
     this.repeatDays = const Value.absent(),
     this.done = const Value.absent(),
+    this.editedAt = const Value.absent(),
+    this.originalContent = const Value.absent(),
     required String source,
     required String batchId,
     required int importedAt,
@@ -592,6 +683,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
     Expression<bool>? reminderSilent,
     Expression<int>? repeatDays,
     Expression<bool>? done,
+    Expression<int>? editedAt,
+    Expression<String>? originalContent,
     Expression<String>? source,
     Expression<String>? batchId,
     Expression<int>? importedAt,
@@ -607,6 +700,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
       if (reminderSilent != null) 'reminder_silent': reminderSilent,
       if (repeatDays != null) 'repeat_days': repeatDays,
       if (done != null) 'done': done,
+      if (editedAt != null) 'edited_at': editedAt,
+      if (originalContent != null) 'original_content': originalContent,
       if (source != null) 'source': source,
       if (batchId != null) 'batch_id': batchId,
       if (importedAt != null) 'imported_at': importedAt,
@@ -624,6 +719,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
     Value<bool>? reminderSilent,
     Value<int>? repeatDays,
     Value<bool>? done,
+    Value<int>? editedAt,
+    Value<String?>? originalContent,
     Value<String>? source,
     Value<String>? batchId,
     Value<int>? importedAt,
@@ -639,6 +736,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
       reminderSilent: reminderSilent ?? this.reminderSilent,
       repeatDays: repeatDays ?? this.repeatDays,
       done: done ?? this.done,
+      editedAt: editedAt ?? this.editedAt,
+      originalContent: originalContent ?? this.originalContent,
       source: source ?? this.source,
       batchId: batchId ?? this.batchId,
       importedAt: importedAt ?? this.importedAt,
@@ -676,6 +775,12 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
     if (done.present) {
       map['done'] = Variable<bool>(done.value);
     }
+    if (editedAt.present) {
+      map['edited_at'] = Variable<int>(editedAt.value);
+    }
+    if (originalContent.present) {
+      map['original_content'] = Variable<String>(originalContent.value);
+    }
     if (source.present) {
       map['source'] = Variable<String>(source.value);
     }
@@ -703,6 +808,8 @@ class NotesCompanion extends UpdateCompanion<NoteRow> {
           ..write('reminderSilent: $reminderSilent, ')
           ..write('repeatDays: $repeatDays, ')
           ..write('done: $done, ')
+          ..write('editedAt: $editedAt, ')
+          ..write('originalContent: $originalContent, ')
           ..write('source: $source, ')
           ..write('batchId: $batchId, ')
           ..write('importedAt: $importedAt, ')
@@ -1363,6 +1470,8 @@ typedef $$NotesTableCreateCompanionBuilder = NotesCompanion Function({
   Value<bool> reminderSilent,
   Value<int> repeatDays,
   Value<bool> done,
+  Value<int> editedAt,
+  Value<String?> originalContent,
   required String source,
   required String batchId,
   required int importedAt,
@@ -1378,6 +1487,8 @@ typedef $$NotesTableUpdateCompanionBuilder = NotesCompanion Function({
   Value<bool> reminderSilent,
   Value<int> repeatDays,
   Value<bool> done,
+  Value<int> editedAt,
+  Value<String?> originalContent,
   Value<String> source,
   Value<String> batchId,
   Value<int> importedAt,
@@ -1434,6 +1545,16 @@ class $$NotesTableFilterComposer extends Composer<_$AppDatabase, $NotesTable> {
 
   ColumnFilters<bool> get done => $composableBuilder(
     column: $table.done,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get editedAt => $composableBuilder(
+    column: $table.editedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get originalContent => $composableBuilder(
+    column: $table.originalContent,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1507,6 +1628,16 @@ class $$NotesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get editedAt => $composableBuilder(
+    column: $table.editedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get originalContent => $composableBuilder(
+    column: $table.originalContent,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get source => $composableBuilder(
     column: $table.source,
     builder: (column) => ColumnOrderings(column),
@@ -1567,6 +1698,14 @@ class $$NotesTableAnnotationComposer
   GeneratedColumn<bool> get done =>
       $composableBuilder(column: $table.done, builder: (column) => column);
 
+  GeneratedColumn<int> get editedAt =>
+      $composableBuilder(column: $table.editedAt, builder: (column) => column);
+
+  GeneratedColumn<String> get originalContent => $composableBuilder(
+    column: $table.originalContent,
+    builder: (column) => column,
+  );
+
   GeneratedColumn<String> get source =>
       $composableBuilder(column: $table.source, builder: (column) => column);
 
@@ -1616,6 +1755,8 @@ class $$NotesTableTableManager
                 Value<bool> reminderSilent = const Value.absent(),
                 Value<int> repeatDays = const Value.absent(),
                 Value<bool> done = const Value.absent(),
+                Value<int> editedAt = const Value.absent(),
+                Value<String?> originalContent = const Value.absent(),
                 Value<String> source = const Value.absent(),
                 Value<String> batchId = const Value.absent(),
                 Value<int> importedAt = const Value.absent(),
@@ -1630,6 +1771,8 @@ class $$NotesTableTableManager
                 reminderSilent: reminderSilent,
                 repeatDays: repeatDays,
                 done: done,
+                editedAt: editedAt,
+                originalContent: originalContent,
                 source: source,
                 batchId: batchId,
                 importedAt: importedAt,
@@ -1646,6 +1789,8 @@ class $$NotesTableTableManager
                 Value<bool> reminderSilent = const Value.absent(),
                 Value<int> repeatDays = const Value.absent(),
                 Value<bool> done = const Value.absent(),
+                Value<int> editedAt = const Value.absent(),
+                Value<String?> originalContent = const Value.absent(),
                 required String source,
                 required String batchId,
                 required int importedAt,
@@ -1660,6 +1805,8 @@ class $$NotesTableTableManager
                 reminderSilent: reminderSilent,
                 repeatDays: repeatDays,
                 done: done,
+                editedAt: editedAt,
+                originalContent: originalContent,
                 source: source,
                 batchId: batchId,
                 importedAt: importedAt,

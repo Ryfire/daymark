@@ -57,6 +57,7 @@ NoteRow note(String id, String content, int createdAt) => NoteRow(
       reminderSilent: false,
       repeatDays: 0,
       done: false,
+      editedAt: 0,
       source: 'jotlock_json',
       batchId: 'b',
       importedAt: 1,

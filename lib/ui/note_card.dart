@@ -4,13 +4,19 @@ import '../core/jotlock_compat.dart';
 import '../core/timeline.dart';
 import '../db/database.dart';
 
-/// Compact card for the timeline. Read-only by design: daymark never
-/// edits jotlock's notes, it only renders and analyzes them.
+/// Compact card for the timeline. Render and analyze, plus a long-press
+/// quick-rewrite entry point; daymark never pushes edits back to jotlock.
 class NoteCard extends StatelessWidget {
-  const NoteCard({super.key, required this.note, required this.onOpen});
+  const NoteCard({
+    super.key,
+    required this.note,
+    required this.onOpen,
+    this.onLongPress,
+  });
 
   final NoteRow note;
   final VoidCallback onOpen;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +60,7 @@ class NoteCard extends StatelessWidget {
           style: note.done ? doneStyle : null,
         ),
         onTap: onOpen,
+        onLongPress: onLongPress,
       ),
     );
   }

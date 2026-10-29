@@ -23,7 +23,14 @@ class Notes extends Table {
   IntColumn get repeatDays => integer().withDefault(const Constant(0))();
   BoolColumn get done => boolean().withDefault(const Constant(false))();
 
-  /// Where the row came from ('jotlock_json' for now; more sources later).
+  /// Quick-rewrite provenance: when > 0 the note was replaced by a
+  /// rewritten version, and [originalContent] holds the text before that
+  /// edit (single-level undo; the true original stays in jotlock).
+  IntColumn get editedAt => integer().withDefault(const Constant(0))();
+  TextColumn get originalContent => text().nullable()();
+
+  /// Where the row came from ('jotlock_json' for imports, 'daymark_ai'
+  /// for notes created in-app); more sources later.
   TextColumn get source => text()();
   TextColumn get batchId => text()();
   IntColumn get importedAt => integer()();
@@ -65,13 +72,17 @@ class AppDatabase extends _$AppDatabase {
       : super(executor ?? driftDatabase(name: 'daymark'));
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         onUpgrade: (m, from, to) async {
           if (from < 2) {
             await m.createTable(appSettings);
+          }
+          if (from < 3) {
+            await m.addColumn(notes, notes.editedAt);
+            await m.addColumn(notes, notes.originalContent);
           }
         },
       );

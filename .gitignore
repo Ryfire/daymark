@@ -46,3 +46,13 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# Personal note backups — never commit (may contain real notes/secrets)
+jotlock_backup_*.json
+jotlock_backup_*.txt
+
+# Local dev environment — not part of the public release
+scripts/dev.ps1
+
+# Distribution/packaging notes
+obtainium.txt

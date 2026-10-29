@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
+import '../data/rewrite_prompts.dart';
 import '../llm/llm_client.dart';
 import '../llm/llm_config.dart';
 import '../llm/providers.dart';
@@ -173,10 +175,103 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return t.length <= 60 ? t : '${t.substring(0, 60)}…';
   }
 
+  Future<void> _savePrompts(List<RewritePrompt> prompts) async {
+    await ref
+        .read(settingsRepositoryProvider)
+        .setString(RewritePrompt.settingsKey, encodeRewritePrompts(prompts));
+  }
+
+  /// Add or edit one quick-rewrite prompt; null [existing] creates a new
+  /// one. The prompts provider live-updates the list and the sheet.
+  Future<void> _editPrompt([RewritePrompt? existing]) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final labelController =
+        TextEditingController(text: existing?.label ?? '');
+    final promptController =
+        TextEditingController(text: existing?.prompt ?? '');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title:
+            Text(existing == null ? 'Add prompt' : 'Edit prompt'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: labelController,
+              decoration: const InputDecoration(
+                labelText: 'Label',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: promptController,
+              minLines: 3,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Prompt',
+                hintText: 'What the model should do with the note',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (saved != true) return;
+    final label = labelController.text.trim();
+    final prompt = promptController.text.trim();
+    if (label.isEmpty || prompt.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Label and prompt are required')),
+      );
+      return;
+    }
+    final current = ref.read(rewritePromptsProvider).value ??
+        List<RewritePrompt>.from(RewritePrompt.defaults);
+    final next = existing == null
+        ? [
+            ...current,
+            RewritePrompt(
+              id: const Uuid().v4(),
+              label: label,
+              prompt: prompt,
+            ),
+          ]
+        : [
+            for (final p in current)
+              p.id == existing.id
+                  ? RewritePrompt(
+                      id: existing.id, label: label, prompt: prompt)
+                  : p,
+          ];
+    await _savePrompts(next);
+  }
+
+  Future<void> _deletePrompt(RewritePrompt prompt) async {
+    final current = ref.read(rewritePromptsProvider).value ??
+        List<RewritePrompt>.from(RewritePrompt.defaults);
+    await _savePrompts(
+      current.where((p) => p.id != prompt.id).toList(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = ref.watch(llmConfigProvider).value;
     if (!_seeded && config != null) _seedFromConfig(config);
+    final prompts = ref.watch(rewritePromptsProvider).value;
 
     return Scaffold(
       appBar: AppBar(title: const Text('LLM provider')),
@@ -319,6 +414,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PlaygroundScreen()),
             ),
+          ),
+          const SizedBox(height: 24),
+          const Divider(),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Quick rewrite prompts',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ),
+              TextButton(
+                onPressed: () => _savePrompts(RewritePrompt.defaults),
+                child: const Text('Restore defaults'),
+              ),
+            ],
+          ),
+          Text(
+            'Long-press a note to rewrite it with one of these.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 8),
+          if (prompts != null && prompts.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text('No prompts saved.'),
+            )
+          else
+            Column(
+              children: [
+                for (final prompt in prompts ?? const <RewritePrompt>[])
+                  ListTile(
+                    title: Text(prompt.label),
+                    subtitle: Text(
+                      prompt.prompt,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => _editPrompt(prompt),
+                    trailing: IconButton(
+                      tooltip: 'Delete prompt',
+                      onPressed: () => _deletePrompt(prompt),
+                      icon: const Icon(Icons.delete_outline),
+                    ),
+                  ),
+              ],
+            ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _editPrompt,
+            icon: const Icon(Icons.add),
+            label: const Text('Add prompt'),
           ),
         ],
       ),

@@ -6,17 +6,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/import_service.dart';
 import '../data/jotlock_backup.dart';
+import '../data/rewrite_prompts.dart';
 import '../data/share_intake.dart';
 import '../core/timeline.dart';
 import '../db/database.dart';
 import '../providers.dart';
+import '../llm/providers.dart';
 import 'note_card.dart';
 import 'note_detail_screen.dart';
+import 'note_rewrite_screen.dart';
 import 'ask_screen.dart';
 import 'settings_screen.dart';
 
 /// Day-grouped timeline of every imported jotlock note, plus the import
-/// entry point. Read-only companion: no editing, only analysis.
+/// entry point. The library mirrors jotlock: deletion only, no editing.
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -112,6 +115,90 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     }
   }
 
+  /// Long-press quick-rewrite entry: picks the prompt sheet from the
+  /// saved prompts and pushes the streaming rewrite screen for the note.
+  Future<void> _showRewriteSheet(NoteRow note) async {
+    final prompts = ref.read(rewritePromptsProvider).value ??
+        List.unmodifiable(RewritePrompt.defaults);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('Quick rewrite'),
+            ),
+            if (prompts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text(
+                    'No rewrite prompts. Add some in Settings.'),
+              )
+            else
+              for (final prompt in prompts)
+                ListTile(
+                  title: Text(prompt.label),
+                  subtitle: Text(
+                    prompt.prompt,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => NoteRewriteScreen(
+                          note: note,
+                          prompt: prompt,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Asks for confirmation, then removes every imported note. Import
+  /// batch rows stay as history; jotlock is untouched.
+  Future<void> _confirmDeleteAll(List<NoteRow> notes) async {
+    final scheme = Theme.of(context).colorScheme;
+    final messenger = ScaffoldMessenger.of(context);
+    final db = ref.read(databaseProvider);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete all notes?'),
+        content: Text(
+            'This permanently removes all ${notes.length} imported notes. '
+            'JotLock keeps its own copies.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: scheme.error,
+              foregroundColor: scheme.onError,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Delete all'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await db.delete(db.notes).go();
+    messenger.showSnackBar(
+      SnackBar(content: Text('Deleted ${notes.length} notes')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final notesAsync = ref.watch(notesStreamProvider);
@@ -159,6 +246,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   ),
                   icon: const Icon(Icons.settings_outlined),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'More options',
+                  onSelected: (value) {
+                    if (value == 'deleteAll') {
+                      _confirmDeleteAll(notesAsync.value ?? const []);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem(
+                      value: 'deleteAll',
+                      enabled:
+                          (notesAsync.value ?? const <NoteRow>[]).isNotEmpty,
+                      child: ListTile(
+                        leading: Icon(
+                          Icons.delete_sweep_outlined,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        title: const Text('Delete all notes'),
+                      ),
+                    ),
+                  ],
                 ),
               ],
       ),
@@ -220,6 +329,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               onOpen: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => NoteDetailScreen(note: note)),
               ),
+              onLongPress: () => _showRewriteSheet(note),
             ),
         };
       },

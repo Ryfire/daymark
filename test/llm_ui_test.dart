@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:daymark/data/rewrite_prompts.dart';
 import 'package:daymark/llm/providers.dart';
 import 'package:daymark/ui/playground_screen.dart';
 import 'package:daymark/ui/settings_screen.dart';
@@ -9,12 +10,14 @@ import 'package:daymark/ui/settings_screen.dart';
 void main() {
   testWidgets('settings screen renders empty form when unconfigured',
       (tester) async {
-    // A plain constant stream avoids the drift teardown-timer problem that
+    // Plain constant streams avoid the drift teardown-timer problem that
     // live query streams trigger under fake_async.
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           llmConfigProvider.overrideWith((ref) => Stream.value(null)),
+          rewritePromptsProvider
+              .overrideWith((ref) => Stream.value(RewritePrompt.defaults)),
         ],
         child: const MaterialApp(home: SettingsScreen()),
       ),

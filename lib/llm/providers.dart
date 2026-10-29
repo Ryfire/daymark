@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/rewrite_prompts.dart';
 import '../data/settings_repository.dart';
 import '../providers.dart';
 import 'llm_client.dart';
@@ -7,6 +8,16 @@ import 'llm_config.dart';
 
 final settingsRepositoryProvider = Provider<SettingsRepository>((ref) {
   return SettingsRepository(ref.watch(databaseProvider));
+});
+
+/// Quick-rewrite prompts, live-updating as the settings editor changes
+/// them. Falls back to the defaults when the key is absent or corrupt.
+final rewritePromptsProvider = StreamProvider<List<RewritePrompt>>((ref) {
+  final repo = ref.watch(settingsRepositoryProvider);
+  return repo.watchString(RewritePrompt.settingsKey).map(
+        (raw) => parseRewritePrompts(raw) ??
+            List.unmodifiable(RewritePrompt.defaults),
+      );
 });
 
 /// The configured provider, live-updating as the user edits settings.
