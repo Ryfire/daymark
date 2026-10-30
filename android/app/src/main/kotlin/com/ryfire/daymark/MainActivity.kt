@@ -68,6 +68,14 @@ class MainActivity : FlutterActivity() {
                             // JotLock only: skips the system chooser and lands
                             // in its editor pre-filled for one-tap confirmation.
                             setPackage("com.ryfire.jotlock")
+                            // Own task for JotLock: without NEW_TASK its editor
+                            // stacks on top of Daymark inside Daymark's task,
+                            // and tapping Daymark's launcher icon later just
+                            // re-fronts that task with JotLock showing. NEW_TASK
+                            // (jotlock's MainActivity declares an empty
+                            // taskAffinity, so no unrelated task matches) keeps
+                            // the two apps separate; Daymark stays reachable.
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
                         try {
                             startActivity(share)
