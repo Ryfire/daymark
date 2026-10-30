@@ -85,6 +85,27 @@ class MainActivity : FlutterActivity() {
                         }
                     }
                 }
+                "shareText" -> {
+                    val text = call.argument<String>("text")?.trim().orEmpty()
+                    if (text.isEmpty()) {
+                        result.error("invalid", "Text is empty", null)
+                    } else {
+                        // Unrestricted ACTION_SEND: the system share sheet
+                        // picks the destination (JotLock, SMS, mail, ...).
+                        // JotLock shows up because its MainActivity declares
+                        // a text/plain SEND filter.
+                        val send = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_TEXT, text)
+                        }
+                        try {
+                            startActivity(Intent.createChooser(send, null))
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("share_failed", e.message, null)
+                        }
+                    }
+                }
                 "openUrl" -> {
                     val url = call.argument<String>("url").orEmpty()
                     val opened = if (url.startsWith("https://") ||

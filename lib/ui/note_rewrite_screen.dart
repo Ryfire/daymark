@@ -173,6 +173,19 @@ class _NoteRewriteScreenState extends ConsumerState<NoteRewriteScreen> {
     );
   }
 
+  /// Opens the system share sheet with the rewrite as plain text —
+  /// JotLock, messages, anywhere. Only a failure is announced; the
+  /// sheet itself is the success feedback.
+  Future<void> _share() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref.read(jotlockSenderProvider).shareText(_text.trim());
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not share')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -264,6 +277,11 @@ class _NoteRewriteScreenState extends ConsumerState<NoteRewriteScreen> {
                   onPressed: _sendToJotlock,
                   icon: const Icon(Icons.send_outlined),
                   label: const Text('Send to JotLock'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _share,
+                  icon: const Icon(Icons.share_outlined),
+                  label: const Text('Share'),
                 ),
                 OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),

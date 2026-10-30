@@ -48,6 +48,19 @@ class JotlockSender {
     }
   }
 
+  /// Opens the system share sheet with [text] as plain text: JotLock,
+  /// messages, mail — any destination that accepts text. Purely additive
+  /// to [sendNote], which stays the one-tap JotLock handoff. Returns
+  /// false when the share could not be started.
+  Future<bool> shareText(String text) async {
+    try {
+      return await channel.invokeMethod<bool>('shareText', {'text': text}) ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Opens [url] in the system browser; the app itself stays offline.
   /// Native side enforces https/http.
   Future<void> openUrl(String url) async {

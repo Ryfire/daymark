@@ -65,12 +65,15 @@ NoteRow note(String id, String content, int createdAt) => NoteRow(
       importedAt: 1,
     );
 
-/// Mock for the `daymark/outgoing` platform side: records sent notes and
-/// (for the About page) opened URLs; [sendError] makes sendNote fail.
+/// Mock for the `daymark/outgoing` platform side: records sent notes,
+/// shared texts and (for the About page) opened URLs; [sendError] /
+/// [shareError] make the corresponding calls fail.
 class FakeOutgoingChannel {
   final List<String> sent = [];
+  final List<String> shared = [];
   final List<String> opened = [];
   Object? sendError;
+  Object? shareError;
 
   late final MethodChannel channel = MethodChannel('test/outgoing');
 
@@ -82,6 +85,11 @@ class FakeOutgoingChannel {
           final error = sendError;
           if (error is PlatformException) throw error;
           sent.add(call.arguments['text'] as String);
+          return true;
+        case 'shareText':
+          final error = shareError;
+          if (error is PlatformException) throw error;
+          shared.add(call.arguments['text'] as String);
           return true;
         case 'getVersionName':
           return '0.1.0';
@@ -266,6 +274,34 @@ void main() {
 
     expect(find.text('JotLock is not installed'), findsOneWidget);
     expect((await db.select(db.notes).get()), hasLength(1));
+  });
+
+  testWidgets('share hands the rewrite to the system share sheet',
+      (tester) async {
+    final outgoing = FakeOutgoingChannel()..install();
+    await pumpRewrite(tester, outgoing: outgoing);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Share'));
+    await tester.pumpAndSettle();
+
+    expect(outgoing.shared, hasLength(1));
+    expect(outgoing.shared.single, contains('Dinner money on counter'));
+    // Success feedback is the sheet itself; no snackbar noise.
+    expect(find.byType(SnackBar), findsNothing);
+  });
+
+  testWidgets('share failure degrades to a snackbar', (tester) async {
+    final outgoing = FakeOutgoingChannel()
+      ..install()
+      ..shareError = PlatformException(code: 'share_failed');
+    await pumpRewrite(tester, outgoing: outgoing);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Share'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Could not share'), findsOneWidget);
   });
 
   testWidgets('stream errors surface and keep the note untouched',
