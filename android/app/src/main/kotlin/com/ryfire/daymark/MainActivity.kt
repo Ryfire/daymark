@@ -98,8 +98,14 @@ class MainActivity : FlutterActivity() {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, text)
                         }
+                        // NEW_TASK on the chooser itself: the sheet (and any
+                        // target it starts, including direct-share chips whose
+                        // intents carry no flags) then lives in its own
+                        // disposable task instead of stacking inside Daymark's.
+                        val chooser = Intent.createChooser(send, null)
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         try {
-                            startActivity(Intent.createChooser(send, null))
+                            startActivity(chooser)
                             result.success(true)
                         } catch (e: Exception) {
                             result.error("share_failed", e.message, null)
