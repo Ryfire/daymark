@@ -81,6 +81,7 @@ original (you confirm the save in JotLock).
 flutter pub get
 flutter test
 flutter build apk --release   # or: flutter run
+flutter build apk --release --split-per-abi   # per-architecture APKs, ~3x smaller (what the releases page ships)
 ```
 
 Requires Flutter 3.47+ (Android target).
