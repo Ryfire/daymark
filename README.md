@@ -86,6 +86,11 @@ flutter build apk --release   # or: flutter run
 
 Requires Flutter 3.47+ (Android target).
 
+Release builds are signed with the real release keystore when
+`android/key.properties` exists (it points at a keystore outside the repo —
+never commit the file or the key), and fall back to the Android debug key
+when it doesn't, so a fresh clone always builds.
+
 ## Provider setup
 
 Daymark speaks the OpenAI-compatible API dialect — `POST /v1/chat/completions`
