@@ -141,8 +141,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (config.hasModel) {
         reply = await client.complete(
           messages: [
-            const ChatMessage.user(
-                'Reply with exactly the word: ready'),
+            const ChatMessage.user('Reply with exactly the word: ready'),
           ],
         );
       } else {
@@ -150,9 +149,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         reply = models.isEmpty ? 'no models listed' : models.first;
       }
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(
-        content: Text('Connected. Server replied: ${_clip(reply)}'),
-      ));
+      messenger.showSnackBar(
+        SnackBar(content: Text('Connected. Server replied: ${_clip(reply)}')),
+      );
     } on LlmApiException catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(SnackBar(content: Text(e.message)));
@@ -185,15 +184,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   /// one. The prompts provider live-updates the list and the sheet.
   Future<void> _editPrompt([RewritePrompt? existing]) async {
     final messenger = ScaffoldMessenger.of(context);
-    final labelController =
-        TextEditingController(text: existing?.label ?? '');
-    final promptController =
-        TextEditingController(text: existing?.prompt ?? '');
+    final labelController = TextEditingController(text: existing?.label ?? '');
+    final promptController = TextEditingController(
+      text: existing?.prompt ?? '',
+    );
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title:
-            Text(existing == null ? 'Add prompt' : 'Edit prompt'),
+        title: Text(existing == null ? 'Add prompt' : 'Edit prompt'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -238,33 +236,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       );
       return;
     }
-    final current = ref.read(rewritePromptsProvider).value ??
+    final current =
+        ref.read(rewritePromptsProvider).value ??
         List<RewritePrompt>.from(RewritePrompt.defaults);
     final next = existing == null
         ? [
             ...current,
-            RewritePrompt(
-              id: const Uuid().v4(),
-              label: label,
-              prompt: prompt,
-            ),
+            RewritePrompt(id: const Uuid().v4(), label: label, prompt: prompt),
           ]
         : [
             for (final p in current)
               p.id == existing.id
-                  ? RewritePrompt(
-                      id: existing.id, label: label, prompt: prompt)
+                  ? RewritePrompt(id: existing.id, label: label, prompt: prompt)
                   : p,
           ];
     await _savePrompts(next);
   }
 
   Future<void> _deletePrompt(RewritePrompt prompt) async {
-    final current = ref.read(rewritePromptsProvider).value ??
+    final current =
+        ref.read(rewritePromptsProvider).value ??
         List<RewritePrompt>.from(RewritePrompt.defaults);
-    await _savePrompts(
-      current.where((p) => p.id != prompt.id).toList(),
-    );
+    await _savePrompts(current.where((p) => p.id != prompt.id).toList());
   }
 
   @override
@@ -275,199 +268,205 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('LLM provider')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(
-            'Any OpenAI-compatible server works: Ollama, LM Studio, '
-            'llama.cpp, or a cloud API gateway. Point at its API root '
-            '(usually ending in /v1).',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _baseUrlController,
-            keyboardType: TextInputType.url,
-            autofillHints: const [AutofillHints.url],
-            decoration: const InputDecoration(
-              labelText: 'Base URL',
-              hintText: 'http://192.168.1.20:11434/v1',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _apiKeyController,
-            obscureText: _obscureKey,
-            autocorrect: false,
-            enableSuggestions: false,
-            decoration: InputDecoration(
-              labelText: 'API key (optional)',
-              border: const OutlineInputBorder(),
-              suffixIcon: IconButton(
-                onPressed: () => setState(() => _obscureKey = !_obscureKey),
-                icon: Icon(
-                  _obscureKey
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _modelController,
-                  decoration: const InputDecoration(
-                    labelText: 'Model',
-                    hintText: 'e.g. llama3.2:3b',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: _loadingModels
-                    ? const Padding(
-                        padding: EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      )
-                    : OutlinedButton.icon(
-                        onPressed: _loadModels,
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Fetch'),
-                      ),
-              ),
-            ],
-          ),
-          if (_modelFetchError != null) ...[
-            const SizedBox(height: 8),
+      // SafeArea bottom: without it the last items (+ Add prompt) end up
+      // under the system navigation bar on phones.
+      body: SafeArea(
+        top: false,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
             Text(
-              _modelFetchError!,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
-              ),
-            ),
-          ],
-          if (_models.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                for (final model in _models)
-                  ActionChip(
-                    label: Text(model),
-                    onPressed: () =>
-                        setState(() => _modelController.text = model),
-                  ),
-              ],
-            ),
-          ],
-          const SizedBox(height: 24),
-          FilledButton.icon(
-            onPressed: _saving ? null : _save,
-            icon: _saving
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.save_outlined),
-            label: const Text('Save provider'),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _testing ? null : _testConnection,
-            icon: _testing
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.network_check),
-            label: const Text('Test connection'),
-          ),
-          const SizedBox(height: 24),
-          if (config != null)
-            Text(
-              'Active: ${config.baseUrl}'
-              '${config.hasModel ? ' · ${config.model}' : ' · no model set'}',
+              'Any OpenAI-compatible server works: Ollama, LM Studio, '
+              'llama.cpp, or a cloud API gateway. Point at its API root '
+              '(usually ending in /v1).',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-          const SizedBox(height: 24),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.science_outlined),
-            title: const Text('Provider playground'),
-            subtitle: const Text(
-                'Ungrounded chat with the raw model, for testing settings'),
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const PlaygroundScreen()),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _baseUrlController,
+              keyboardType: TextInputType.url,
+              autofillHints: const [AutofillHints.url],
+              decoration: const InputDecoration(
+                labelText: 'Base URL',
+                hintText: 'http://192.168.1.20:11434/v1',
+                border: OutlineInputBorder(),
+              ),
             ),
-          ),
-          const SizedBox(height: 24),
-          const Divider(),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'Quick rewrite prompts',
-                  style: Theme.of(context).textTheme.titleSmall,
+            const SizedBox(height: 12),
+            TextField(
+              controller: _apiKeyController,
+              obscureText: _obscureKey,
+              autocorrect: false,
+              enableSuggestions: false,
+              decoration: InputDecoration(
+                labelText: 'API key (optional)',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  onPressed: () => setState(() => _obscureKey = !_obscureKey),
+                  icon: Icon(
+                    _obscureKey
+                        ? Icons.visibility_outlined
+                        : Icons.visibility_off_outlined,
+                  ),
                 ),
               ),
-              TextButton(
-                onPressed: () => _savePrompts(RewritePrompt.defaults),
-                child: const Text('Restore defaults'),
-              ),
-            ],
-          ),
-          Text(
-            'Long-press a note to rewrite it with one of these.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: 8),
-          if (prompts != null && prompts.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 8),
-              child: Text('No prompts saved.'),
-            )
-          else
-            Column(
+            ),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                for (final prompt in prompts ?? const <RewritePrompt>[])
-                  ListTile(
-                    title: Text(prompt.label),
-                    subtitle: Text(
-                      prompt.prompt,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    onTap: () => _editPrompt(prompt),
-                    trailing: IconButton(
-                      tooltip: 'Delete prompt',
-                      onPressed: () => _deletePrompt(prompt),
-                      icon: const Icon(Icons.delete_outline),
+                Expanded(
+                  child: TextField(
+                    controller: _modelController,
+                    decoration: const InputDecoration(
+                      labelText: 'Model',
+                      hintText: 'e.g. llama3.2:3b',
+                      border: OutlineInputBorder(),
                     ),
                   ),
+                ),
+                const SizedBox(width: 8),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: _loadingModels
+                      ? const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        )
+                      : OutlinedButton.icon(
+                          onPressed: _loadModels,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Fetch'),
+                        ),
+                ),
               ],
             ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _editPrompt,
-            icon: const Icon(Icons.add),
-            label: const Text('Add prompt'),
-          ),
-        ],
+            if (_modelFetchError != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _modelFetchError!,
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.error,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+            if (_models.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  for (final model in _models)
+                    ActionChip(
+                      label: Text(model),
+                      onPressed: () =>
+                          setState(() => _modelController.text = model),
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: _saving ? null : _save,
+              icon: _saving
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: const Text('Save provider'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _testing ? null : _testConnection,
+              icon: _testing
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.network_check),
+              label: const Text('Test connection'),
+            ),
+            const SizedBox(height: 24),
+            if (config != null)
+              Text(
+                'Active: ${config.baseUrl}'
+                '${config.hasModel ? ' · ${config.model}' : ' · no model set'}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            const SizedBox(height: 24),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.science_outlined),
+              title: const Text('Provider playground'),
+              subtitle: const Text(
+                'Ungrounded chat with the raw model, for testing settings',
+              ),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PlaygroundScreen()),
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Divider(),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Quick rewrite prompts',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => _savePrompts(RewritePrompt.defaults),
+                  child: const Text('Restore defaults'),
+                ),
+              ],
+            ),
+            Text(
+              'Long-press a note to rewrite it with one of these.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            if (prompts != null && prompts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text('No prompts saved.'),
+              )
+            else
+              Column(
+                children: [
+                  for (final prompt in prompts ?? const <RewritePrompt>[])
+                    ListTile(
+                      title: Text(prompt.label),
+                      subtitle: Text(
+                        prompt.prompt,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      onTap: () => _editPrompt(prompt),
+                      trailing: IconButton(
+                        tooltip: 'Delete prompt',
+                        onPressed: () => _deletePrompt(prompt),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ),
+                ],
+              ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _editPrompt,
+              icon: const Icon(Icons.add),
+              label: const Text('Add prompt'),
+            ),
+          ],
+        ),
       ),
     );
   }
