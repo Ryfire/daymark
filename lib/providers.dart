@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'data/jotlock_send.dart';
 import 'db/database.dart';
 
 /// The app-wide drift database. Overridable in tests with an in-memory one.
@@ -16,4 +17,9 @@ final notesStreamProvider = StreamProvider<List<NoteRow>>((ref) {
   return (db.select(db.notes)
         ..orderBy([(n) => OrderingTerm.desc(n.createdAt)]))
       .watch();
+});
+
+/// Send-to-JotLock bridge. Overridable in tests with a recording fake.
+final jotlockSenderProvider = Provider<JotlockSender>((ref) {
+  return JotlockSender();
 });

@@ -15,6 +15,7 @@ import '../llm/providers.dart';
 import 'note_card.dart';
 import 'note_detail_screen.dart';
 import 'note_rewrite_screen.dart';
+import 'about_screen.dart';
 import 'ask_screen.dart';
 import 'settings_screen.dart';
 
@@ -253,6 +254,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                     if (value == 'deleteAll') {
                       _confirmDeleteAll(notesAsync.value ?? const []);
                     }
+                    if (value == 'about') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const AboutScreen()),
+                      );
+                    }
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(
@@ -265,6 +271,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                           color: Theme.of(context).colorScheme.error,
                         ),
                         title: const Text('Delete all notes'),
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'about',
+                      child: ListTile(
+                        leading: Icon(Icons.info_outline),
+                        title: Text('About'),
                       ),
                     ),
                   ],

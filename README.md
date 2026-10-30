@@ -24,7 +24,9 @@ you jotted down.
   readability, fix typos & grammar, turn it into a checklist, summarize.
   The rewrite streams in next to the original; then copy it, replace the
   note (undoable — the pre-edit text is kept and a revert action stays on
-  the note), or save it as a new one. Prompts are fully editable: add your
+  the note), save it as a new one, or send it to JotLock as a new note
+  (JotLock's editor opens pre-filled; you confirm the save there).
+  Prompts are fully editable: add your
   own, tweak the wording, restore the defaults — all in Settings.
 - **Share-sheet intake** — export a backup from JotLock (Settings → Export
   notes (JSON)) and share it straight to Daymark. Re-shares are merged by
@@ -49,8 +51,11 @@ Notes live in a local SQLite database on your device. Nothing is synced and
 nothing leaves the device except the text of the notes selected for the
 question or rewrite you asked for, sent to the LLM endpoint **you**
 configured. There are no accounts, no analytics, and no bundled AI service.
-Daymark is strictly read-only toward JotLock: it never modifies your notes
-there. Deleted notes are gone from Daymark only — JotLock still has them.
+Daymark never modifies or deletes your notes in JotLock. Deleted notes
+are gone from Daymark only — JotLock still has them. The only write
+direction is explicit: **Send to JotLock** on the rewrite screen shares
+the rewritten text back, where it lands as a *new* note next to the
+original (you confirm the save in JotLock).
 
 ## Building
 
@@ -83,16 +88,27 @@ connection**.
 - Anything else exposing the OpenAI shape (vLLM, LiteLLM, Azure gateways...)
 
 LAN endpoints over plain HTTP are supported (Android cleartext is enabled
-for this reason); if connections time out, your firewall is dropping inbound
-traffic to the server's port.
+for this reason). If the server runs on another device on your network,
+two one-time steps are needed — the same ones any LAN client requires,
+nothing Daymark-specific:
+
+1. **Serve on the network, not just localhost.** Ollama: `OLLAMA_HOST=0.0.0.0`
+   (or `ollama serve --host 0.0.0.0`). LM Studio: Developer tab →
+   **Serve on Local Network**. llama.cpp: `--host 0.0.0.0`.
+2. **Allow the port through the OS firewall** for inbound connections
+   (Windows offers the allow dialog on first listen — tick Private
+   networks).
+
+If connections time out instead of being refused, the firewall is dropping
+inbound traffic to the server's port. A DHCP reservation on the router
+keeps the server's IP stable so the Base URL never needs updating.
 
 ## Roadmap
 
 - Digests generated on import (no daily ritual required)
-- Optional write-back to JotLock via intents (requires a JotLock-side
-  change): rewritten or consolidated notes saved back into JotLock as new
-  notes — e.g. a "Send to JotLock" action next to Copy / Replace on the
-  rewrite screen
+- Silent write-back: a no-UI save receiver in JotLock so "Send to
+  JotLock" appends without the confirmation tap (requires a JotLock-side
+  change; the share-based flow needs none)
 - In-app speech-to-text
 - v2: on-device inference (llama.cpp) and on-device neural TTS (Piper), for a
   fully offline loop

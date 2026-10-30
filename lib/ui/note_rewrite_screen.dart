@@ -159,6 +159,20 @@ class _NoteRewriteScreenState extends ConsumerState<NoteRewriteScreen> {
     );
   }
 
+  /// Shares the rewrite to JotLock as a NEW note (append-only): jotlock's
+  /// editor opens pre-filled and the user confirms there. Daymark's
+  /// database is untouched either way; the note rejoins the mirror on the
+  /// next backup import. Never replaces the original in jotlock.
+  Future<void> _sendToJotlock() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await ref
+        .read(jotlockSenderProvider)
+        .sendNote(_text.trim());
+    messenger.showSnackBar(
+      SnackBar(content: Text(outcome.message)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -245,6 +259,11 @@ class _NoteRewriteScreenState extends ConsumerState<NoteRewriteScreen> {
                   onPressed: _saveAsNew,
                   icon: const Icon(Icons.add_circle_outline),
                   label: const Text('Save as new'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _sendToJotlock,
+                  icon: const Icon(Icons.send_outlined),
+                  label: const Text('Send to JotLock'),
                 ),
                 OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),

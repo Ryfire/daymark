@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:daymark/data/jotlock_send.dart';
 import 'package:daymark/data/rewrite_prompts.dart';
 import 'package:daymark/db/database.dart';
 import 'package:daymark/llm/llm_client.dart';
@@ -64,11 +65,42 @@ NoteRow note(String id, String content, int createdAt) => NoteRow(
       importedAt: 1,
     );
 
+/// Mock for the `daymark/outgoing` platform side: records sent notes and
+/// (for the About page) opened URLs; [sendError] makes sendNote fail.
+class FakeOutgoingChannel {
+  final List<String> sent = [];
+  final List<String> opened = [];
+  Object? sendError;
+
+  late final MethodChannel channel = MethodChannel('test/outgoing');
+
+  void install() {
+    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      switch (call.method) {
+        case 'sendNote':
+          final error = sendError;
+          if (error is PlatformException) throw error;
+          sent.add(call.arguments['text'] as String);
+          return true;
+        case 'getVersionName':
+          return '0.1.0';
+        case 'openUrl':
+          opened.add(call.arguments['url'] as String);
+          return true;
+        default:
+          return null;
+      }
+    });
+  }
+}
+
 /// In-memory db with the note pre-inserted, then the rewrite screen pushed
 /// on top of a placeholder route so pops behave like the real app.
 Future<(AppDatabase, FakeRewriteClient)> pumpRewrite(
   WidgetTester tester, {
   FakeRewriteClient? client,
+  FakeOutgoingChannel? outgoing,
 }) async {
   final db = AppDatabase(NativeDatabase.memory());
   addTearDown(db.close);
@@ -77,6 +109,10 @@ Future<(AppDatabase, FakeRewriteClient)> pumpRewrite(
     overrides: [
       databaseProvider.overrideWithValue(db),
       llmClientProvider.overrideWith((ref) => fake),
+      if (outgoing != null)
+        jotlockSenderProvider.overrideWithValue(
+          JotlockSender(channel: outgoing.channel),
+        ),
     ],
   );
   addTearDown(container.dispose);
@@ -199,6 +235,37 @@ void main() {
         .getSingle();
     expect(row.content, 'sitter thu 6-10pm - dinner money on counter');
     expect(row.editedAt, 0);
+  });
+
+  testWidgets('send to jotlock hands the rewrite to the platform channel',
+      (tester) async {
+    final outgoing = FakeOutgoingChannel()..install();
+    final (db, _) = await pumpRewrite(tester, outgoing: outgoing);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Send to JotLock'));
+    await tester.pumpAndSettle();
+
+    expect(outgoing.sent, hasLength(1));
+    expect(outgoing.sent.single, contains('Dinner money on counter'));
+    expect(find.textContaining('Opened in JotLock'), findsOneWidget);
+    // Append-only: the library itself is untouched by the send.
+    expect((await db.select(db.notes).get()), hasLength(1));
+  });
+
+  testWidgets('send failure degrades to a snackbar', (tester) async {
+    final outgoing = FakeOutgoingChannel()
+      ..install()
+      ..sendError = PlatformException(
+          code: 'no_jotlock', message: 'JotLock is not installed');
+    final (db, _) = await pumpRewrite(tester, outgoing: outgoing);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.widgetWithText(OutlinedButton, 'Send to JotLock'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('JotLock is not installed'), findsOneWidget);
+    expect((await db.select(db.notes).get()), hasLength(1));
   });
 
   testWidgets('stream errors surface and keep the note untouched',
