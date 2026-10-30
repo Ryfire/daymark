@@ -10,6 +10,14 @@ local mirror of them on a day-grouped timeline, lets you interrogate your
 own notes with an LLM you choose and host, and can tidy up the shorthand
 you jotted down.
 
+## Screenshots
+
+| **Library & quick rewrite** | **Grounded ask with sources** |
+| :--- | :--- |
+| ![Day-grouped timeline with the quick-rewrite prompt sheet open](screenshots/library.png) | ![A grounded answer citing the notes it used, with tappable sources](screenshots/ask.png) |
+| **Review a rewrite** | **Batch selection** |
+| ![The original next to the rewrite, with copy, replace, save-as-new and send actions](screenshots/rewrite.png) | ![Select-notes mode with a rewrite bar, for a batch rewrite session](screenshots/batch.png) |
+
 ## What it does
 
 - **Grounded ask-over-notes** — ask a question and the app selects the
