@@ -126,13 +126,3 @@ nothing Daymark-specific:
 If connections time out instead of being refused, the firewall is dropping
 inbound traffic to the server's port. A DHCP reservation on the router
 keeps the server's IP stable so the Base URL never needs updating.
-
-## Roadmap
-
-- Digests generated on import (no daily ritual required)
-- Silent write-back: a no-UI save receiver in JotLock so "Send to
-  JotLock" appends without the confirmation tap (requires a JotLock-side
-  change; the share-based flow needs none)
-- In-app speech-to-text
-- v2: on-device inference (llama.cpp) and on-device neural TTS (Piper), for a
-  fully offline loop
