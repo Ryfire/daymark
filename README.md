@@ -12,11 +12,10 @@ you jotted down.
 
 ## Screenshots
 
-| **Library & quick rewrite** | **Grounded ask with sources** |
-| :--- | :--- |
-| ![Day-grouped timeline with the quick-rewrite prompt sheet open](screenshots/library.png) | ![A grounded answer citing the notes it used, with tappable sources](screenshots/ask.png) |
-| **Review a rewrite** | **Batch selection** |
-| ![The original next to the rewrite, with copy, replace, save-as-new and send actions](screenshots/rewrite.png) | ![Select-notes mode with a rewrite bar, for a batch rewrite session](screenshots/batch.png) |
+| Library | Ask | Rewrite | Batch rewrite |
+|:---:|:---:|:---:|:---:|
+| ![Notes on a day-grouped timeline with the quick-rewrite sheet open](screenshots/library.png) | ![A streamed answer citing the notes it used, with source chips](screenshots/ask.png) | ![The original next to the rewrite, with review actions](screenshots/rewrite.png) | ![Two notes selected with a rewrite bar at the bottom](screenshots/batch.png) |
+| Import JotLock backups onto a day-grouped timeline; open any note for a quick rewrite. | Answers stream in with [nN] citations — tap a source chip to open the note. | Compare against the original, then copy, replace, save as new, or send to JotLock. | Select several notes, run one prompt across them, review each result. |
 
 ## What it does
 
