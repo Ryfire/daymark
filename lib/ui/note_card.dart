@@ -6,17 +6,23 @@ import '../db/database.dart';
 
 /// Compact card for the timeline. Render and analyze, plus a long-press
 /// quick-rewrite entry point; daymark never pushes edits back to jotlock.
+/// In selection mode ([onToggleSelect] non-null) taps toggle the note
+/// instead of opening it, and a checkbox replaces the pin indicator.
 class NoteCard extends StatelessWidget {
   const NoteCard({
     super.key,
     required this.note,
     required this.onOpen,
     this.onLongPress,
+    this.selected = false,
+    this.onToggleSelect,
   });
 
   final NoteRow note;
   final VoidCallback onOpen;
   final VoidCallback? onLongPress;
+  final bool selected;
+  final ValueChanged<bool>? onToggleSelect;
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +31,7 @@ class NoteCard extends StatelessWidget {
     final (checked, total) = checklistProgress(note.content);
     final doneStyle = TextStyle(color: scheme.outline);
     final subtitleParts = <String>[
-      formatTime(
-        DateTime.fromMillisecondsSinceEpoch(note.createdAt),
-      ),
+      formatTime(DateTime.fromMillisecondsSinceEpoch(note.createdAt)),
       if (total > 0) '$checked/$total',
       if (note.hasReminder)
         'reminds ${_formatReminder(note.reminderTime)}'
@@ -37,7 +41,12 @@ class NoteCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       color: tint,
       child: ListTile(
-        leading: note.pinned ? const Icon(Icons.push_pin, size: 20) : null,
+        leading: onToggleSelect != null
+            ? Checkbox(
+                value: selected,
+                onChanged: (value) => onToggleSelect!(value ?? false),
+              )
+            : (note.pinned ? const Icon(Icons.push_pin, size: 20) : null),
         title: checklistItems(note.content).isEmpty
             ? Text(
                 note.content,
@@ -59,8 +68,12 @@ class NoteCard extends StatelessWidget {
           subtitleParts.join(' · '),
           style: note.done ? doneStyle : null,
         ),
-        onTap: onOpen,
-        onLongPress: onLongPress,
+        onTap: onToggleSelect != null
+            ? () => onToggleSelect!(!selected)
+            : onOpen,
+        onLongPress: onToggleSelect != null
+            ? () => onToggleSelect!(!selected)
+            : onLongPress,
       ),
     );
   }
@@ -158,9 +171,6 @@ class ReadOnlyChecklist extends StatelessWidget {
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: rows,
-    );
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: rows);
   }
 }

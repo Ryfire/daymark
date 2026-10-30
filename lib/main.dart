@@ -14,6 +14,8 @@ class DaymarkApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Daymark',
+      // Screenshots of debug builds stay clean; release never shows it.
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: Colors.teal),
       darkTheme: ThemeData(
         colorSchemeSeed: Colors.teal,

@@ -20,6 +20,17 @@ you jotted down.
   citations back to the real notes; tap a chip to open the note. If the
   notes don't contain the answer, the model is instructed to say so
   instead of guessing.
+- **Duplicate triage** — "Find duplicates" scans the library for exact
+  and near-duplicate notes (case, punctuation and checklist-marker
+  differences ignored; near-repeats group at 75% token overlap) and lets
+  you delete extra copies behind a confirmation. Deletion removes
+  Daymark's copy only — JotLock keeps its own, so re-importing a backup
+  can restore anything removed here.
+- **Batch rewrite sessions** — select any number of notes (⋮ → Select
+  notes), apply one prompt, and review each streamed result as it lands:
+  keep it (saved as a new note; batch never overwrites originals) or
+  skip it. At the end, kept rewrites can be sent to JotLock one share at
+  a time — each opens JotLock's editor pre-filled for you to confirm.
 - **Quick rewrite** — long-press a note and pick a prompt: improve
   readability, fix typos & grammar, turn it into a checklist, summarize.
   The rewrite streams in next to the original; then copy it, replace the

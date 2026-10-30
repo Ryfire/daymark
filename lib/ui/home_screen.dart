@@ -17,6 +17,8 @@ import 'note_detail_screen.dart';
 import 'note_rewrite_screen.dart';
 import 'about_screen.dart';
 import 'ask_screen.dart';
+import 'batch_rewrite_screen.dart';
+import 'duplicates_screen.dart';
 import 'settings_screen.dart';
 
 /// Day-grouped timeline of every imported jotlock note, plus the import
@@ -34,6 +36,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final ShareIntake _intake = ShareIntake();
   bool _searching = false;
   bool _importing = false;
+  bool _selecting = false;
+  final Set<String> _selectedIds = {};
 
   @override
   void initState() {
@@ -79,6 +83,88 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     setState(() => _searching = false);
   }
 
+  void _enterSelect() {
+    setState(() {
+      _selecting = true;
+      _selectedIds.clear();
+    });
+  }
+
+  void _exitSelect() {
+    setState(() {
+      _selecting = false;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelect(String id) {
+    setState(() {
+      if (!_selectedIds.remove(id)) _selectedIds.add(id);
+    });
+  }
+
+  /// Prompt picker shared by the single-note long-press and the batch
+  /// selection flow: one sheet, one push target per count.
+  Future<void> _showRewriteSheet(List<NoteRow> notes) async {
+    final prompts =
+        ref.read(rewritePromptsProvider).value ??
+        List.unmodifiable(RewritePrompt.defaults);
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                notes.length == 1
+                    ? 'Quick rewrite'
+                    : 'Quick rewrite — ${notes.length} notes',
+              ),
+            ),
+            if (prompts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child: Text('No rewrite prompts. Add some in Settings.'),
+              )
+            else
+              for (final prompt in prompts)
+                ListTile(
+                  title: Text(prompt.label),
+                  subtitle: Text(
+                    prompt.prompt,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () async {
+                    Navigator.of(sheetContext).pop();
+                    if (notes.length == 1) {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => NoteRewriteScreen(
+                            note: notes.single,
+                            prompt: prompt,
+                          ),
+                        ),
+                      );
+                    } else {
+                      await Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              BatchRewriteScreen(notes: notes, prompt: prompt),
+                        ),
+                      );
+                    }
+                    if (mounted) _exitSelect();
+                  },
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _importBackup() async {
     if (_importing) return;
     setState(() => _importing = true);
@@ -108,60 +194,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         const SnackBar(content: Text('Not a JotLock backup file')),
       );
     } catch (_) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('Import failed')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('Import failed')));
     } finally {
       if (mounted) setState(() => _importing = false);
     }
-  }
-
-  /// Long-press quick-rewrite entry: picks the prompt sheet from the
-  /// saved prompts and pushes the streaming rewrite screen for the note.
-  Future<void> _showRewriteSheet(NoteRow note) async {
-    final prompts = ref.read(rewritePromptsProvider).value ??
-        List.unmodifiable(RewritePrompt.defaults);
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Quick rewrite'),
-            ),
-            if (prompts.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text(
-                    'No rewrite prompts. Add some in Settings.'),
-              )
-            else
-              for (final prompt in prompts)
-                ListTile(
-                  title: Text(prompt.label),
-                  subtitle: Text(
-                    prompt.prompt,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  onTap: () {
-                    Navigator.of(sheetContext).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => NoteRewriteScreen(
-                          note: note,
-                          prompt: prompt,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-          ],
-        ),
-      ),
-    );
   }
 
   /// Asks for confirmation, then removes every imported note. Import
@@ -175,8 +211,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete all notes?'),
         content: Text(
-            'This permanently removes all ${notes.length} imported notes. '
-            'JotLock keeps its own copies.'),
+          'This permanently removes all ${notes.length} imported notes. '
+          'JotLock keeps its own copies.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -203,9 +240,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final notesAsync = ref.watch(notesStreamProvider);
+    final notes = notesAsync.value ?? const <NoteRow>[];
     return Scaffold(
       appBar: AppBar(
-        title: _searching
+        title: _selecting
+            ? Text(
+                _selectedIds.isEmpty
+                    ? 'Select notes'
+                    : '${_selectedIds.length} selected',
+              )
+            : _searching
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
@@ -215,12 +259,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 ),
                 onChanged: (_) => setState(() {}),
               )
-            : switch (notesAsync.value) {
-                null => const Text('Daymark'),
-                final notes when notes.isEmpty => const Text('Daymark'),
-                final notes => Text('Daymark (${notes.length})'),
+            : switch (notes) {
+                const [] => const Text('Daymark'),
+                _ => Text('Daymark (${notes.length})'),
               },
-        actions: _searching
+        leading: _selecting
+            ? IconButton(
+                tooltip: 'Stop selecting',
+                onPressed: _exitSelect,
+                icon: const Icon(Icons.close),
+              )
+            : null,
+        actions: _selecting
+            ? const []
+            : _searching
             ? [
                 IconButton(
                   tooltip: 'Close search',
@@ -231,9 +283,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             : [
                 IconButton(
                   tooltip: 'Ask your notes',
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AskScreen()),
-                  ),
+                  onPressed: () => Navigator.of(
+                    context,
+                  ).push(MaterialPageRoute(builder: (_) => const AskScreen())),
                   icon: const Icon(Icons.chat_bubble_outline),
                 ),
                 IconButton(
@@ -251,8 +303,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                 PopupMenuButton<String>(
                   tooltip: 'More options',
                   onSelected: (value) {
+                    if (value == 'duplicates') {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const DuplicatesScreen(),
+                        ),
+                      );
+                    }
+                    if (value == 'select') _enterSelect();
                     if (value == 'deleteAll') {
-                      _confirmDeleteAll(notesAsync.value ?? const []);
+                      _confirmDeleteAll(notes);
                     }
                     if (value == 'about') {
                       Navigator.of(context).push(
@@ -262,9 +322,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   },
                   itemBuilder: (context) => [
                     PopupMenuItem(
+                      value: 'duplicates',
+                      enabled: notes.isNotEmpty,
+                      child: ListTile(
+                        leading: const Icon(Icons.copy_all_outlined),
+                        title: const Text('Find duplicates'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'select',
+                      enabled: notes.isNotEmpty,
+                      child: ListTile(
+                        leading: const Icon(Icons.checklist),
+                        title: const Text('Select notes'),
+                      ),
+                    ),
+                    PopupMenuItem(
                       value: 'deleteAll',
-                      enabled:
-                          (notesAsync.value ?? const <NoteRow>[]).isNotEmpty,
+                      enabled: notes.isNotEmpty,
                       child: ListTile(
                         leading: Icon(
                           Icons.delete_sweep_outlined,
@@ -286,10 +361,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       ),
       body: notesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(child: Text('Could not load notes: $error')),
+        error: (error, _) =>
+            Center(child: Text('Could not load notes: $error')),
         data: (notes) => _buildBody(notes),
       ),
-      floatingActionButton: _searching
+      bottomNavigationBar: _selecting
+          ? SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _selectedIds.isEmpty
+                            ? null
+                            : _startBatchRewrite,
+                        icon: const Icon(Icons.auto_fix_high_outlined),
+                        label: Text('Rewrite (${_selectedIds.length})'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    TextButton(
+                      onPressed: _exitSelect,
+                      child: const Text('Cancel'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : null,
+      floatingActionButton: _searching || _selecting
           ? null
           : FloatingActionButton.extended(
               onPressed: _importing ? null : _importBackup,
@@ -305,14 +406,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
+  /// Pushes the batch rewrite session for the selected notes, in stream
+  /// order (newest first); selection mode exits when the screen pops.
+  Future<void> _startBatchRewrite() async {
+    final notes = ref.read(notesStreamProvider).value ?? const <NoteRow>[];
+    final selected = notes
+        .where((note) => _selectedIds.contains(note.id))
+        .toList();
+    if (selected.isEmpty) return;
+    await _showRewriteSheet(selected);
+    if (mounted) _exitSelect();
+  }
+
   Widget _buildBody(List<NoteRow> notes) {
     if (notes.isEmpty) return _EmptyState(onImport: _importBackup);
     final query = _searching ? _searchController.text.trim() : '';
     final filtered = query.isEmpty
         ? notes
         : notes
-            .where((n) => n.content.toLowerCase().contains(query.toLowerCase()))
-            .toList();
+              .where(
+                (n) => n.content.toLowerCase().contains(query.toLowerCase()),
+              )
+              .toList();
     if (filtered.isEmpty) return const Center(child: Text('No matching notes'));
     final groups = groupByDay(filtered, (n) => n.createdAt);
     final rows = <_TimelineRow>[];
@@ -329,21 +444,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         final row = rows[index];
         return switch (row) {
           _HeaderRow(:final day) => Padding(
-              padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
-              child: Text(
-                dayHeader(day),
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-              ),
+            padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+            child: Text(
+              dayHeader(day),
+              style: Theme.of(context).textTheme.titleSmall
+                  ?.copyWith(color: Theme.of(context).colorScheme.primary),
             ),
+          ),
           _NoteRow(:final note) => NoteCard(
-              note: note,
-              onOpen: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => NoteDetailScreen(note: note)),
-              ),
-              onLongPress: () => _showRewriteSheet(note),
+            note: note,
+            selected: _selectedIds.contains(note.id),
+            onToggleSelect: _selecting ? (_) => _toggleSelect(note.id) : null,
+            onOpen: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => NoteDetailScreen(note: note)),
             ),
+            onLongPress: () => _showRewriteSheet([note]),
+          ),
         };
       },
     );
@@ -405,9 +521,7 @@ class _EmptyState extends StatelessWidget {
               '(Settings → Export notes (JSON))\n'
               'and import it here to get started.',
               textAlign: TextAlign.center,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
+              style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: scheme.outline),
             ),
             const SizedBox(height: 24),
