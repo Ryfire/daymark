@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/jotlock_compat.dart';
@@ -8,9 +11,13 @@ import '../db/database.dart';
 import '../providers.dart';
 import 'note_card.dart';
 
-/// Full view of one imported note: complete text with checklist
-/// rendering, plus all metadata jotlock preserved in the backup. The
-/// note can be deleted from here; editing stays in jotlock.
+/// Full view of one note: complete text with checklist rendering, plus
+/// all the metadata preserved from jotlock. The note can be deleted from
+/// here; editing stays in jotlock. Notes Daymark itself created
+/// (quick-rewrite "Save as new", source 'daymark_ai') also get share
+/// actions in the app-bar menu — Copy, system Share and Send to
+/// JotLock — so a rewrite saved as new can be handed on straight from
+/// its details, without redoing the rewrite flow.
 class NoteDetailScreen extends ConsumerStatefulWidget {
   const NoteDetailScreen({super.key, required this.note});
 
@@ -85,10 +92,39 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
           PopupMenuButton<String>(
             tooltip: 'Note options',
             onSelected: (value) {
+              if (value == 'copy') _copy(note);
+              if (value == 'share') _share(note);
+              if (value == 'jotlock') _sendToJotlock(note);
               if (value == 'delete') _confirmDelete(note);
               if (value == 'revert') _confirmRevert(note);
             },
             itemBuilder: (context) => [
+              // Share actions live on this screen for Daymark-created
+              // notes: a rewrite saved as new can be handed on (JotLock,
+              // system sheet, clipboard) right from its detail view.
+              if (note.source == 'daymark_ai') ...[
+                PopupMenuItem(
+                  value: 'copy',
+                  child: ListTile(
+                    leading: const Icon(Icons.copy_outlined),
+                    title: const Text('Copy'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'share',
+                  child: ListTile(
+                    leading: const Icon(Icons.share_outlined),
+                    title: const Text('Share'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'jotlock',
+                  child: ListTile(
+                    leading: const Icon(Icons.send_outlined),
+                    title: const Text('Send to JotLock'),
+                  ),
+                ),
+              ],
               if (note.originalContent != null)
                 PopupMenuItem(
                   value: 'revert',
@@ -142,6 +178,45 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  /// Copies the note text to the clipboard — the same handoff the
+  /// rewrite screen offers. Fire-and-forget: the platform-channel reply
+  /// can stall under fake_async (widget tests) and there is nothing
+  /// actionable on failure.
+  void _copy(NoteRow note) {
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(Clipboard.setData(ClipboardData(text: note.content)));
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Copied to clipboard')),
+    );
+  }
+
+  /// Opens the system share sheet with the note as plain text — JotLock,
+  /// messages, mail, anywhere. Only a failure is announced; the sheet
+  /// itself is the success feedback.
+  Future<void> _share(NoteRow note) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref.read(jotlockSenderProvider).shareText(note.content);
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not share')),
+      );
+    }
+  }
+
+  /// Hands the note text to JotLock as a NEW note (append-only):
+  /// jotlock's editor opens pre-filled and the user confirms the save
+  /// there. Daymark's database is untouched either way — for a note
+  /// saved as new this is the step that lands the rewrite in jotlock.
+  Future<void> _sendToJotlock(NoteRow note) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await ref
+        .read(jotlockSenderProvider)
+        .sendNote(note.content);
+    messenger.showSnackBar(
+      SnackBar(content: Text(outcome.message)),
     );
   }
 
