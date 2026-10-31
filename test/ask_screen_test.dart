@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:daymark/data/jotlock_send.dart';
 import 'package:daymark/db/database.dart';
 import 'package:daymark/llm/llm_client.dart';
 import 'package:daymark/llm/llm_config.dart';
@@ -10,6 +11,7 @@ import 'package:daymark/llm/providers.dart';
 import 'package:daymark/providers.dart';
 import 'package:daymark/tts/speech.dart';
 import 'package:daymark/ui/ask_screen.dart';
+import 'package:flutter/services.dart';
 
 class FakeGroundedClient implements LlmClient {
   List<ChatMessage>? lastMessages;
@@ -47,6 +49,37 @@ class FakeSpeech implements SpeechController {
   Future<void> stop() async {}
 }
 
+/// Mock for the `daymark/outgoing` platform side: records sent notes and
+/// shared texts; [sendError] / [shareError] make the calls fail.
+class FakeOutgoingChannel {
+  final List<String> sent = [];
+  final List<String> shared = [];
+  Object? sendError;
+  Object? shareError;
+
+  late final MethodChannel channel = MethodChannel('test/outgoing');
+
+  void install() {
+    TestWidgetsFlutterBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      switch (call.method) {
+        case 'sendNote':
+          final error = sendError;
+          if (error is PlatformException) throw error;
+          sent.add(call.arguments['text'] as String);
+          return true;
+        case 'shareText':
+          final error = shareError;
+          if (error is PlatformException) throw error;
+          shared.add(call.arguments['text'] as String);
+          return true;
+        default:
+          return null;
+      }
+    });
+  }
+}
+
 NoteRow note(String id, String content, int createdAt) => NoteRow(
       id: id,
       content: content,
@@ -71,6 +104,7 @@ Future<void> pumpAsk(
   WidgetTester tester, {
   required LlmClient client,
   bool autoplay = false,
+  FakeOutgoingChannel? outgoing,
 }) async {
   final db = AppDatabase(NativeDatabase.memory());
   addTearDown(db.close);
@@ -92,6 +126,10 @@ Future<void> pumpAsk(
       ),
       llmClientProvider.overrideWith((ref) => client),
       speechProvider.overrideWith((ref) => speech),
+      if (outgoing != null)
+        jotlockSenderProvider.overrideWithValue(
+          JotlockSender(channel: outgoing.channel),
+        ),
     ],
   );
   addTearDown(container.dispose);
@@ -149,5 +187,67 @@ void main() {
 
     expect(find.textContaining('I have no idea'), findsOneWidget);
     expect(find.text('Sources'), findsNothing);
+  });
+
+  testWidgets('a reply bubble offers Copy, Share and Send to JotLock from '
+      'its options menu', (tester) async {
+    final outgoing = FakeOutgoingChannel()..install();
+    final client = FakeGroundedClient();
+    await pumpAsk(tester, client: client, outgoing: outgoing);
+
+    await tester.enterText(find.byType(TextField), 'when did I plant tomatoes');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Reply options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy'), findsOneWidget);
+    expect(find.text('Share'), findsOneWidget);
+    expect(find.text('Send to JotLock'), findsOneWidget);
+
+    await tester.tap(find.text('Share'));
+    await tester.pumpAndSettle();
+    expect(outgoing.shared, ['The tomatoes were planted [n1].']);
+
+    await tester.tap(find.byTooltip('Reply options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Send to JotLock'));
+    await tester.pumpAndSettle();
+    expect(outgoing.sent, ['The tomatoes were planted [n1].']);
+    expect(
+      find.text('Opened in JotLock — tap Save to keep it'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('chat options menu shares the transcript and reports export '
+      'failures', (tester) async {
+    final outgoing = FakeOutgoingChannel()..install();
+    final client = FakeGroundedClient();
+    await pumpAsk(tester, client: client, outgoing: outgoing);
+
+    await tester.enterText(find.byType(TextField), 'when did I plant tomatoes');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Chat options'));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy chat'), findsOneWidget);
+    expect(find.text('Share chat'), findsOneWidget);
+    expect(find.text('Export chat (.md)'), findsOneWidget);
+
+    await tester.tap(find.text('Share chat'));
+    await tester.pumpAndSettle();
+    expect(outgoing.shared, hasLength(1));
+    expect(outgoing.shared.first, contains('# Ask session'));
+    expect(outgoing.shared.first, contains('when did I plant tomatoes'));
+    expect(outgoing.shared.first, contains('The tomatoes were planted [n1].'));
+
+    await tester.tap(find.byTooltip('Chat options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Export chat (.md)'));
+    await tester.pumpAndSettle();
+    // No file_picker platform mock in tests: the save fails loudly.
+    expect(find.text('Could not export chat'), findsOneWidget);
   });
 }

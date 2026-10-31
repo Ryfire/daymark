@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/chat_export.dart';
 import '../core/timeline.dart';
 import '../db/database.dart';
 import '../llm/grounding.dart';
@@ -34,9 +38,12 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   bool _streaming = false;
   ContextSelection? _lastSelection;
 
-  /// Selection that grounded each message, parallel to [_messages] (user
+/// Selection that grounded each message, parallel to [_messages] (user
   /// messages carry null). Kept in lockstep with every mutation below.
   final _selections = <ContextSelection?>[];
+
+  /// When each message was added (the ask time), parallel to [_messages].
+  final _times = <DateTime>[];
 
   /// Captured in initState: ref must not be used inside dispose, and a
   /// stable controller reference keeps the stop-on-dispose rule simple.
@@ -57,6 +64,100 @@ class _AskScreenState extends ConsumerState<AskScreen> {
     super.dispose();
   }
 
+  /// Copies a whole reply to the clipboard — the same handoff the note
+  /// detail screen offers. Fire-and-forget: the platform-channel reply
+  /// can stall under fake_async (widget tests) and there is nothing
+  /// actionable on failure.
+  void _copyReply(String text) {
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(Clipboard.setData(ClipboardData(text: text)));
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Copied to clipboard')),
+    );
+  }
+
+  /// Shares a reply through the system share sheet — the same handoff the
+  /// note detail screen offers, offered when the reply bubble is held.
+  Future<void> _shareReply(String text) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref.read(jotlockSenderProvider).shareText(text);
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not share')),
+      );
+    }
+  }
+
+  /// Hands a reply to JotLock as a NEW note (append-only): jotlock's
+  /// editor opens pre-filled and the user confirms the save there.
+  Future<void> _sendReplyToJotlock(String text) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final outcome = await ref.read(jotlockSenderProvider).sendNote(text);
+    messenger.showSnackBar(
+      SnackBar(content: Text(outcome.message)),
+    );
+  }
+
+  /// The whole session as a markdown transcript — the payload behind the
+  /// Copy chat / Share chat / Export chat actions.
+  String get _transcript => buildChatTranscript(
+        _messages,
+        _times,
+        exportedAt: DateTime.now(),
+      );
+
+  bool get _hasConversation =>
+      _messages.any((m) => m.content.trim().isNotEmpty);
+
+  /// Copies the whole transcript to the clipboard. Fire-and-forget: the
+  /// platform-channel reply can stall under fake_async (widget tests).
+  void _copyChat() {
+    final messenger = ScaffoldMessenger.of(context);
+    unawaited(Clipboard.setData(ClipboardData(text: _transcript)));
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Chat copied to clipboard')),
+    );
+  }
+
+  /// Opens the system share sheet with the transcript as text. Only a
+  /// failure is announced; the sheet itself is the success feedback.
+  Future<void> _shareChat() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref.read(jotlockSenderProvider).shareText(_transcript);
+    if (!ok) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not share')),
+      );
+    }
+  }
+
+  /// Saves the transcript as a markdown file at a location the user picks
+  /// via the system file picker. Silence means the picker was cancelled.
+  Future<void> _exportChat() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final stamp = DateTime.now();
+      final fileName = 'daymark-ask-'
+          '${stamp.year.toString().padLeft(4, '0')}-'
+          '${stamp.month.toString().padLeft(2, '0')}-'
+          '${stamp.day.toString().padLeft(2, '0')}-'
+          '${formatTime(stamp).replaceAll(':', '')}.md';
+      final uri = await FilePicker.saveFile(
+        fileName: fileName,
+        bytes: Uint8List.fromList(utf8.encode(_transcript)),
+        mimeType: 'text/markdown',
+      );
+      if (uri == null) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Chat exported')),
+      );
+    } catch (_) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Could not export chat')),
+      );
+    }
+  }
+
   void _sendQuestion(List<NoteRow> notes) {
     if (_streaming) return;
     final client = ref.read(llmClientProvider);
@@ -71,11 +172,14 @@ class _AskScreenState extends ConsumerState<AskScreen> {
     final systemMessage =
         ChatMessage.system(buildGroundedSystemPrompt(selection));
 
-    setState(() {
+setState(() {
+      final now = DateTime.now();
       _messages.add(ChatMessage.user(text));
       _selections.add(null);
+      _times.add(now);
       _messages.add(const ChatMessage.assistant(''));
       _selections.add(selection);
+      _times.add(now);
       _streaming = true;
     });
     _scrollToBottom();
@@ -98,12 +202,13 @@ class _AskScreenState extends ConsumerState<AskScreen> {
       onError: (Object error) {
         setState(() {
           final errorText = '⚠ $error';
-          if (buffer.isEmpty) {
+if (buffer.isEmpty) {
             _messages[_messages.length - 1] =
                 ChatMessage.assistant(errorText);
           } else {
             _messages.add(ChatMessage.assistant(errorText));
             _selections.add(null);
+            _times.add(DateTime.now());
           }
           _streaming = false;
         });
@@ -113,10 +218,11 @@ class _AskScreenState extends ConsumerState<AskScreen> {
         // Streams deliver error THEN done: an error bubble already
         // replaced the placeholder, so only remove a still-empty one.
         final last = _messages.last;
-        if (last.role == 'assistant' && last.content.isEmpty) {
+if (last.role == 'assistant' && last.content.isEmpty) {
           setState(() {
             _messages.removeLast();
             _selections.removeLast();
+            _times.removeLast();
             _streaming = false;
           });
         } else {
@@ -175,7 +281,44 @@ class _AskScreenState extends ConsumerState<AskScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Ask your notes'),
-        actions: const [SpeedButton(), AutoplayToggle()],
+        actions: [
+          const SpeedButton(),
+          const AutoplayToggle(),
+          PopupMenuButton<String>(
+            tooltip: 'Chat options',
+            onSelected: (value) {
+              if (value == 'copy') _copyChat();
+              if (value == 'share') _shareChat();
+              if (value == 'export') _exportChat();
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'copy',
+                enabled: _hasConversation,
+                child: ListTile(
+                  leading: const Icon(Icons.copy_outlined),
+                  title: const Text('Copy chat'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'share',
+                enabled: _hasConversation,
+                child: ListTile(
+                  leading: const Icon(Icons.share_outlined),
+                  title: const Text('Share chat'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'export',
+                enabled: _hasConversation,
+                child: ListTile(
+                  leading: const Icon(Icons.file_download_outlined),
+                  title: const Text('Export chat (.md)'),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: notesAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -235,11 +378,14 @@ class _AskScreenState extends ConsumerState<AskScreen> {
                         message.content.trim().isNotEmpty &&
                         !message.content.startsWith('⚠') &&
                         selection != null;
-                    if (!showSources) {
+if (!showSources) {
                       return ChatBubble(
                         message: message,
                         onSpeak: (text) =>
                         unawaited(_speech.speak(text, rate: _currentSpeechRate())),
+                        onCopy: _copyReply,
+                        onShare: _shareReply,
+                        onSendToJotlock: _sendReplyToJotlock,
                       );
                     }
                     return Column(
@@ -249,6 +395,9 @@ class _AskScreenState extends ConsumerState<AskScreen> {
                           message: message,
                           onSpeak: (text) =>
                         unawaited(_speech.speak(text, rate: _currentSpeechRate())),
+                          onCopy: _copyReply,
+                          onShare: _shareReply,
+                          onSendToJotlock: _sendReplyToJotlock,
                         ),
                         _SourcesRow(
                           selection: selection,
