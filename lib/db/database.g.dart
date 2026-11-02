@@ -1443,12 +1443,316 @@ class AppSettingsCompanion extends UpdateCompanion<AppSettingRow> {
   }
 }
 
+class $AskMessagesTable extends AskMessages
+    with TableInfo<$AskMessagesTable, AskMessageRow> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $AskMessagesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _roleMeta = const VerificationMeta('role');
+  @override
+  late final GeneratedColumn<String> role = GeneratedColumn<String>(
+    'role',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _contentMeta = const VerificationMeta(
+    'content',
+  );
+  @override
+  late final GeneratedColumn<String> content = GeneratedColumn<String>(
+    'content',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _askedAtMeta = const VerificationMeta(
+    'askedAt',
+  );
+  @override
+  late final GeneratedColumn<int> askedAt = GeneratedColumn<int>(
+    'asked_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id, role, content, askedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'ask_messages';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<AskMessageRow> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('role')) {
+      context.handle(
+        _roleMeta,
+        role.isAcceptableOrUnknown(data['role']!, _roleMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_roleMeta);
+    }
+    if (data.containsKey('content')) {
+      context.handle(
+        _contentMeta,
+        content.isAcceptableOrUnknown(data['content']!, _contentMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_contentMeta);
+    }
+    if (data.containsKey('asked_at')) {
+      context.handle(
+        _askedAtMeta,
+        askedAt.isAcceptableOrUnknown(data['asked_at']!, _askedAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_askedAtMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  AskMessageRow map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return AskMessageRow(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      role: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}role'],
+      )!,
+      content: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}content'],
+      )!,
+      askedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}asked_at'],
+      )!,
+    );
+  }
+
+  @override
+  $AskMessagesTable createAlias(String alias) {
+    return $AskMessagesTable(attachedDatabase, alias);
+  }
+}
+
+class AskMessageRow extends DataClass implements Insertable<AskMessageRow> {
+  final int id;
+
+  /// 'user' or 'assistant' (system prompts are rebuilt at ask time, never
+  /// stored).
+  final String role;
+  final String content;
+
+  /// Epoch millis of the ask — both halves of one turn share the value.
+  final int askedAt;
+  const AskMessageRow({
+    required this.id,
+    required this.role,
+    required this.content,
+    required this.askedAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['role'] = Variable<String>(role);
+    map['content'] = Variable<String>(content);
+    map['asked_at'] = Variable<int>(askedAt);
+    return map;
+  }
+
+  AskMessagesCompanion toCompanion(bool nullToAbsent) {
+    return AskMessagesCompanion(
+      id: Value(id),
+      role: Value(role),
+      content: Value(content),
+      askedAt: Value(askedAt),
+    );
+  }
+
+  factory AskMessageRow.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return AskMessageRow(
+      id: serializer.fromJson<int>(json['id']),
+      role: serializer.fromJson<String>(json['role']),
+      content: serializer.fromJson<String>(json['content']),
+      askedAt: serializer.fromJson<int>(json['askedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'role': serializer.toJson<String>(role),
+      'content': serializer.toJson<String>(content),
+      'askedAt': serializer.toJson<int>(askedAt),
+    };
+  }
+
+  AskMessageRow copyWith({
+    int? id,
+    String? role,
+    String? content,
+    int? askedAt,
+  }) => AskMessageRow(
+    id: id ?? this.id,
+    role: role ?? this.role,
+    content: content ?? this.content,
+    askedAt: askedAt ?? this.askedAt,
+  );
+  AskMessageRow copyWithCompanion(AskMessagesCompanion data) {
+    return AskMessageRow(
+      id: data.id.present ? data.id.value : this.id,
+      role: data.role.present ? data.role.value : this.role,
+      content: data.content.present ? data.content.value : this.content,
+      askedAt: data.askedAt.present ? data.askedAt.value : this.askedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AskMessageRow(')
+          ..write('id: $id, ')
+          ..write('role: $role, ')
+          ..write('content: $content, ')
+          ..write('askedAt: $askedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, role, content, askedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is AskMessageRow &&
+          other.id == this.id &&
+          other.role == this.role &&
+          other.content == this.content &&
+          other.askedAt == this.askedAt);
+}
+
+class AskMessagesCompanion extends UpdateCompanion<AskMessageRow> {
+  final Value<int> id;
+  final Value<String> role;
+  final Value<String> content;
+  final Value<int> askedAt;
+  const AskMessagesCompanion({
+    this.id = const Value.absent(),
+    this.role = const Value.absent(),
+    this.content = const Value.absent(),
+    this.askedAt = const Value.absent(),
+  });
+  AskMessagesCompanion.insert({
+    this.id = const Value.absent(),
+    required String role,
+    required String content,
+    required int askedAt,
+  }) : role = Value(role),
+       content = Value(content),
+       askedAt = Value(askedAt);
+  static Insertable<AskMessageRow> custom({
+    Expression<int>? id,
+    Expression<String>? role,
+    Expression<String>? content,
+    Expression<int>? askedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (role != null) 'role': role,
+      if (content != null) 'content': content,
+      if (askedAt != null) 'asked_at': askedAt,
+    });
+  }
+
+  AskMessagesCompanion copyWith({
+    Value<int>? id,
+    Value<String>? role,
+    Value<String>? content,
+    Value<int>? askedAt,
+  }) {
+    return AskMessagesCompanion(
+      id: id ?? this.id,
+      role: role ?? this.role,
+      content: content ?? this.content,
+      askedAt: askedAt ?? this.askedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (role.present) {
+      map['role'] = Variable<String>(role.value);
+    }
+    if (content.present) {
+      map['content'] = Variable<String>(content.value);
+    }
+    if (askedAt.present) {
+      map['asked_at'] = Variable<int>(askedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('AskMessagesCompanion(')
+          ..write('id: $id, ')
+          ..write('role: $role, ')
+          ..write('content: $content, ')
+          ..write('askedAt: $askedAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $NotesTable notes = $NotesTable(this);
   late final $ImportBatchesTable importBatches = $ImportBatchesTable(this);
   late final $AppSettingsTable appSettings = $AppSettingsTable(this);
+  late final $AskMessagesTable askMessages = $AskMessagesTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -1457,6 +1761,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
     notes,
     importBatches,
     appSettings,
+    askMessages,
   ];
 }
 
@@ -2222,6 +2527,190 @@ typedef $$AppSettingsTableProcessedTableManager =
       AppSettingRow,
       PrefetchHooks Function()
     >;
+typedef $$AskMessagesTableCreateCompanionBuilder =
+    AskMessagesCompanion Function({
+      Value<int> id,
+      required String role,
+      required String content,
+      required int askedAt,
+    });
+typedef $$AskMessagesTableUpdateCompanionBuilder =
+    AskMessagesCompanion Function({
+      Value<int> id,
+      Value<String> role,
+      Value<String> content,
+      Value<int> askedAt,
+    });
+
+class $$AskMessagesTableFilterComposer
+    extends Composer<_$AppDatabase, $AskMessagesTable> {
+  $$AskMessagesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get askedAt => $composableBuilder(
+    column: $table.askedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$AskMessagesTableOrderingComposer
+    extends Composer<_$AppDatabase, $AskMessagesTable> {
+  $$AskMessagesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get role => $composableBuilder(
+    column: $table.role,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get content => $composableBuilder(
+    column: $table.content,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get askedAt => $composableBuilder(
+    column: $table.askedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$AskMessagesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $AskMessagesTable> {
+  $$AskMessagesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get role =>
+      $composableBuilder(column: $table.role, builder: (column) => column);
+
+  GeneratedColumn<String> get content =>
+      $composableBuilder(column: $table.content, builder: (column) => column);
+
+  GeneratedColumn<int> get askedAt =>
+      $composableBuilder(column: $table.askedAt, builder: (column) => column);
+}
+
+class $$AskMessagesTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $AskMessagesTable,
+          AskMessageRow,
+          $$AskMessagesTableFilterComposer,
+          $$AskMessagesTableOrderingComposer,
+          $$AskMessagesTableAnnotationComposer,
+          $$AskMessagesTableCreateCompanionBuilder,
+          $$AskMessagesTableUpdateCompanionBuilder,
+          (
+            AskMessageRow,
+            BaseReferences<_$AppDatabase, $AskMessagesTable, AskMessageRow>,
+          ),
+          AskMessageRow,
+          PrefetchHooks Function()
+        > {
+  $$AskMessagesTableTableManager(_$AppDatabase db, $AskMessagesTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$AskMessagesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$AskMessagesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$AskMessagesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<String> role = const Value.absent(),
+                Value<String> content = const Value.absent(),
+                Value<int> askedAt = const Value.absent(),
+              }) => AskMessagesCompanion(
+                id: id,
+                role: role,
+                content: content,
+                askedAt: askedAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required String role,
+                required String content,
+                required int askedAt,
+              }) => AskMessagesCompanion.insert(
+                id: id,
+                role: role,
+                content: content,
+                askedAt: askedAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$AskMessagesTable, AskMessageRow>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $AskMessagesTable,
+                    AskMessageRow
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$AskMessagesTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $AskMessagesTable,
+      AskMessageRow,
+      $$AskMessagesTableFilterComposer,
+      $$AskMessagesTableOrderingComposer,
+      $$AskMessagesTableAnnotationComposer,
+      $$AskMessagesTableCreateCompanionBuilder,
+      $$AskMessagesTableUpdateCompanionBuilder,
+      (
+        AskMessageRow,
+        BaseReferences<_$AppDatabase, $AskMessagesTable, AskMessageRow>,
+      ),
+      AskMessageRow,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -2232,4 +2721,6 @@ class $AppDatabaseManager {
       $$ImportBatchesTableTableManager(_db, _db.importBatches);
   $$AppSettingsTableTableManager get appSettings =>
       $$AppSettingsTableTableManager(_db, _db.appSettings);
+  $$AskMessagesTableTableManager get askMessages =>
+      $$AskMessagesTableTableManager(_db, _db.askMessages);
 }

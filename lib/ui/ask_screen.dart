@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/chat_export.dart';
 import '../core/timeline.dart';
+import '../data/ask_store.dart';
 import '../db/database.dart';
 import '../llm/grounding.dart';
 import '../llm/llm_client.dart';
@@ -45,6 +46,10 @@ class _AskScreenState extends ConsumerState<AskScreen> {
   /// When each message was added (the ask time), parallel to [_messages].
   final _times = <DateTime>[];
 
+  /// Whether the persisted session has been restored into the lists above.
+  /// Done once, the first time notes are available to re-derive grounding.
+  bool _restored = false;
+
   /// Captured in initState: ref must not be used inside dispose, and a
   /// stable controller reference keeps the stop-on-dispose rule simple.
   late final SpeechController _speech;
@@ -57,11 +62,83 @@ class _AskScreenState extends ConsumerState<AskScreen> {
 
   @override
   void dispose() {
+    // The stream is cancelled but speech is deliberately NOT stopped:
+    // replies keep reading after the screen is backed out or the app is
+    // backgrounded (the controller is app-scoped). Speech still stops on
+    // the Stop button, a new question, or Clear chat.
     _subscription?.cancel();
-    unawaited(_speech.stop());
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Rewrites the stored session from the current in-memory lists. Empty
+  /// assistant placeholders (unfinished turns) are dropped by the store.
+  void _persistSession() {
+    unawaited(saveAskSession(
+        ref.read(databaseProvider), _messages, _times));
+  }
+
+  /// Restores the persisted session once, the first time notes are
+  /// available (grounding selections are re-derived from the stored
+  /// questions). Runs after the first frame so it can setState freely.
+  void _restoreSession(List<NoteRow> notes) {
+    _restored = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final rows = await loadAskMessages(ref.read(databaseProvider));
+      if (!mounted || rows.isEmpty) return;
+      setState(() {
+        String? lastQuestion;
+        for (final row in rows) {
+          if (row.role == 'user') {
+            lastQuestion = row.content;
+            _messages.add(ChatMessage.user(row.content));
+            _selections.add(null);
+          } else {
+            _messages.add(ChatMessage.assistant(row.content));
+            _selections.add(lastQuestion == null
+                ? null
+                : selectContext(notes, lastQuestion));
+          }
+          _times.add(DateTime.fromMillisecondsSinceEpoch(row.askedAt));
+        }
+      });
+    });
+  }
+
+  /// Wipes the session everywhere: screen, storage, and ongoing speech.
+  Future<void> _clearChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Clear this chat?'),
+        content: const Text(
+          'The whole conversation will be deleted. This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    _stop();
+    setState(() {
+      _messages.clear();
+      _selections.clear();
+      _times.clear();
+      _lastSelection = null;
+    });
+    unawaited(clearAskSession(ref.read(databaseProvider)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Chat cleared')),
+    );
   }
 
   /// Copies a whole reply to the clipboard — the same handoff the note
@@ -182,6 +259,7 @@ setState(() {
       _times.add(now);
       _streaming = true;
     });
+    _persistSession();
     _scrollToBottom();
 
     final history = [
@@ -212,6 +290,7 @@ if (buffer.isEmpty) {
           }
           _streaming = false;
         });
+        _persistSession();
         _scrollToBottom();
       },
       onDone: () {
@@ -229,6 +308,7 @@ if (last.role == 'assistant' && last.content.isEmpty) {
           setState(() => _streaming = false);
           _speakIfAutoplay(last.content);
         }
+        _persistSession();
       },
     );
   }
@@ -248,6 +328,9 @@ if (last.role == 'assistant' && last.content.isEmpty) {
     _subscription = null;
     unawaited(_speech.stop());
     setState(() => _streaming = false);
+    // Whatever is left on screen (a partial reply after Stop) is what gets
+    // stored; a mid-stream back-out has nothing new to save.
+    _persistSession();
   }
 
   void _scrollToBottom() {
@@ -290,6 +373,7 @@ if (last.role == 'assistant' && last.content.isEmpty) {
               if (value == 'copy') _copyChat();
               if (value == 'share') _shareChat();
               if (value == 'export') _exportChat();
+              if (value == 'clear') unawaited(_clearChat());
             },
             itemBuilder: (context) => [
               PopupMenuItem(
@@ -314,6 +398,14 @@ if (last.role == 'assistant' && last.content.isEmpty) {
                 child: ListTile(
                   leading: const Icon(Icons.file_download_outlined),
                   title: const Text('Export chat (.md)'),
+                ),
+              ),
+              PopupMenuItem(
+                value: 'clear',
+                enabled: _hasConversation,
+                child: ListTile(
+                  leading: const Icon(Icons.delete_outline),
+                  title: const Text('Clear chat'),
                 ),
               ),
             ],
@@ -347,6 +439,7 @@ if (last.role == 'assistant' && last.content.isEmpty) {
                   'Import a JotLock backup first, then ask about it here.',
             );
           }
+          if (!_restored) _restoreSession(notes);
           return _buildChat(notes);
         },
       ),

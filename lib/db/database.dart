@@ -54,6 +54,25 @@ class ImportBatches extends Table {
   Set<Column> get primaryKey => {id};
 }
 
+/// The persisted Ask chat: one row per message in the single active
+/// session, oldest first by [id]. Rewritten in lockstep with the screen's
+/// in-memory lists, so the conversation survives backing out of the Ask
+/// screen, multitasking and process death; 'Clear chat' empties the table.
+/// Empty assistant placeholders (a turn still streaming, or dropped by a
+/// mid-stream back-out) are never stored.
+@DataClassName('AskMessageRow')
+class AskMessages extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  /// 'user' or 'assistant' (system prompts are rebuilt at ask time, never
+  /// stored).
+  TextColumn get role => text()();
+  TextColumn get content => text()();
+
+  /// Epoch millis of the ask — both halves of one turn share the value.
+  IntColumn get askedAt => integer()();
+}
+
 /// Simple key-value store for app configuration. The LLM provider config
 /// is stored as a JSON blob under a single key, so new fields can be added
 /// without schema churn.
@@ -66,13 +85,13 @@ class AppSettings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
-@DriftDatabase(tables: [Notes, ImportBatches, AppSettings])
+@DriftDatabase(tables: [Notes, ImportBatches, AppSettings, AskMessages])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
       : super(executor ?? driftDatabase(name: 'daymark'));
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -83,6 +102,9 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.addColumn(notes, notes.editedAt);
             await m.addColumn(notes, notes.originalContent);
+          }
+          if (from < 4) {
+            await m.createTable(askMessages);
           }
         },
       );

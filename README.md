@@ -46,6 +46,12 @@ Daymark.**
   citations back to the real notes; tap a chip to open the note. If the
   notes don't contain the answer, the model is instructed to say so
   instead of guessing.
+- **A chat that stays put** — the Ask conversation survives backing out of
+  the screen, switching apps, even a restart: it's stored locally (with its
+  source chips) and is waiting when you return. Mid-stream back-outs keep
+  the question so you can re-ask it. Clearing is a deliberate menu action
+  (⋮ → **Clear chat**, behind a confirmation) — never a side effect of
+  multitasking.
 - **Duplicate triage** — "Find duplicates" scans the library for exact
   and near-duplicate notes (case, punctuation and checklist-marker
   differences ignored; near-repeats group at 75% token overlap) and lets
@@ -81,6 +87,9 @@ Daymark.**
   cloud gateway. No built-in presets by design.
 - **Reads your notes aloud** — tap the speaker on any reply (system TTS
   engine), or flip on autoplay; a speed slider with live preview is built in.
+  Replies keep reading even after you back out of Ask or switch apps — the
+  audio finishes on its own, and stops via the Stop button, a new question,
+  or Clear chat.
 
 ## Privacy & data
 

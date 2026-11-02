@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -47,6 +49,29 @@ class FakeSpeech implements SpeechController {
 
   @override
   Future<void> stop() async {}
+}
+
+/// A client whose reply stream never delivers — the mid-stream back-out
+/// case, where the turn is still in flight when the screen is popped.
+class HangingClient implements LlmClient {
+  @override
+  Future<List<String>> listModels() async => ['fake'];
+
+  @override
+  Future<String> complete({required List<ChatMessage> messages,
+      String? model}) async =>
+      '';
+
+  @override
+  Stream<String> streamChat({required List<ChatMessage> messages,
+      String? model}) {
+    final controller = StreamController<String>();
+    // Never deliver anything; the caller cancels or the test ends.
+    return controller.stream;
+  }
+
+  @override
+  void close() {}
 }
 
 /// Mock for the `daymark/outgoing` platform side: records sent notes and
@@ -100,13 +125,18 @@ NoteRow note(String id, String content, int createdAt) => NoteRow(
 /// via a local teardown, autoplay key pre-written (the settings watch then
 /// settles with a row instead of tearing down mid-absence), speech
 /// provider overridden so no platform plugin is constructed.
-Future<void> pumpAsk(
+/// [database] lets a test seed the persisted session beforehand (or inspect
+/// it afterwards — the db is returned); [pushed] routes AskScreen as a
+/// pushed page (with a system back button) instead of the home widget.
+Future<AppDatabase> pumpAsk(
   WidgetTester tester, {
   required LlmClient client,
   bool autoplay = false,
   FakeOutgoingChannel? outgoing,
+  AppDatabase? database,
+  bool pushed = false,
 }) async {
-  final db = AppDatabase(NativeDatabase.memory());
+  final db = database ?? AppDatabase(NativeDatabase.memory());
   addTearDown(db.close);
 
   final speech = FakeSpeech();
@@ -138,13 +168,28 @@ Future<void> pumpAsk(
       .read(settingsRepositoryProvider)
       .setString(ttsAutoplayKey, autoplay ? '1' : '0');
 
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: AskScreen()),
-    ),
-  );
+  if (pushed) {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(home: Scaffold(appBar: AppBar(title: const Text('Home')))),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    unawaited(navigator.push(
+      MaterialPageRoute(builder: (_) => const AskScreen()),
+    ));
+  } else {
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: AskScreen()),
+      ),
+    );
+  }
   await tester.pumpAndSettle();
+  return db;
 }
 
 void main() {
@@ -249,5 +294,100 @@ void main() {
     await tester.pumpAndSettle();
     // No file_picker platform mock in tests: the save fails loudly.
     expect(find.text('Could not export chat'), findsOneWidget);
+  });
+
+  testWidgets('a finished turn is persisted as one user + one assistant row',
+      (tester) async {
+    final client = FakeGroundedClient();
+    final db = await pumpAsk(tester, client: client);
+
+    await tester.enterText(find.byType(TextField), 'when did I plant tomatoes');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+
+    final rows = await db.select(db.askMessages).get();
+    expect(rows, hasLength(2));
+    expect(rows[0].role, 'user');
+    expect(rows[0].content, 'when did I plant tomatoes');
+    expect(rows[1].role, 'assistant');
+    expect(rows[1].content, 'The tomatoes were planted [n1].');
+  });
+
+  testWidgets('a stored session is restored with its Sources row',
+      (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    await db.into(db.askMessages).insert(AskMessagesCompanion.insert(
+          role: 'user',
+          content: 'when did I plant tomatoes',
+          askedAt: 1730000000000,
+        ));
+    await db.into(db.askMessages).insert(AskMessagesCompanion.insert(
+          role: 'assistant',
+          content: 'The tomatoes were planted [n1].',
+          askedAt: 1730000000000,
+        ));
+
+    await pumpAsk(tester, client: FakeGroundedClient(), database: db);
+
+    // The conversation is back without asking anything.
+    expect(find.textContaining('when did I plant tomatoes'), findsOneWidget);
+    expect(find.textContaining('The tomatoes were planted'), findsOneWidget);
+    // Grounding was re-derived from the stored question.
+    expect(find.text('Sources'), findsOneWidget);
+  });
+
+  testWidgets('Clear chat asks, then empties screen and storage',
+      (tester) async {
+    final client = FakeGroundedClient();
+    final db = await pumpAsk(tester, client: client);
+
+    await tester.enterText(find.byType(TextField), 'when did I plant tomatoes');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('The tomatoes were planted'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Chat options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Clear chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('Clear this chat?'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Clear'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Chat cleared'), findsOneWidget);
+    expect(find.textContaining('tomatoes'), findsNothing);
+    expect(await db.select(db.askMessages).get(), isEmpty);
+  });
+
+  testWidgets('backing out mid-stream keeps the question, drops the partial',
+      (tester) async {
+    final db = await pumpAsk(
+      tester,
+      client: HangingClient(),
+      pushed: true,
+    );
+
+    await tester.enterText(find.byType(TextField), 'when did I plant tomatoes');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pumpAndSettle();
+
+    // Back out while the reply is still "streaming".
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+
+    // Re-enter: the question survived, no half-written reply came back.
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    unawaited(navigator.push(
+      MaterialPageRoute(builder: (_) => const AskScreen()),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('when did I plant tomatoes'), findsOneWidget);
+    expect(find.textContaining('The tomatoes were planted'), findsNothing);
+
+    final rows = await db.select(db.askMessages).get();
+    expect(rows, hasLength(1));
+    expect(rows.single.role, 'user');
   });
 }
