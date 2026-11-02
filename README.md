@@ -10,9 +10,9 @@ local mirror of them on a day-grouped timeline, lets you interrogate your
 own notes with an LLM you choose and host, and can tidy up the shorthand
 you jotted down.
 
-## Why two apps?
+## Why Daymark isn't part of JotLock
 
-Because they do different jobs at different moments. JotLock is for the ten
+They do different jobs at different moments. JotLock is for the ten
 seconds you have — fast, messy capture, no thinking required. Daymark is for
 the ten minutes you don't — reading back, asking, cleaning up. Splitting
 them keeps capture instant and processing deliberate — use either as often
