@@ -46,8 +46,6 @@ class _PlaygroundScreenState extends ConsumerState<PlaygroundScreen> {
     super.dispose();
   }
 
-  bool get _configured => ref.read(llmClientProvider) != null;
-
   void _send() {
     if (_streaming) return;
     final client = ref.read(llmClientProvider);
@@ -143,7 +141,18 @@ class _PlaygroundScreenState extends ConsumerState<PlaygroundScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_configured) {
+    // Watch, never ref.read: the config watch stream is briefly still
+    // loading after a cold start, and a read-only gate never rebuilds when
+    // it lands — the screen stayed stuck on "not configured". Spinner
+    // until it resolves instead of a false unconfigured prompt.
+    final configAsync = ref.watch(llmConfigProvider);
+    if (configAsync.isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Playground')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (configAsync.value == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Playground')),
         body: Center(

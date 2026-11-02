@@ -210,4 +210,46 @@ void main() {
     );
     expect(sendButton.onPressed, isNull);
   });
+
+  testWidgets('cold start streams via the fallback client, no hang',
+      (tester) async {
+    // Regression: the batch screen used to await the watched config stream
+    // on a cold start, but with zero listeners Riverpod pauses that
+    // keep-alive stream — the await hung until a Settings visit resumed
+    // it. It must fall back to the one-shot client provider instead.
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        llmClientFallbackProvider
+            .overrideWith((ref) => Future.value(FakeBatchClient())),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final rows = [note('a', 'costco run', 1000)];
+    await db.into(db.notes).insert(rows.first);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(key: Key('home'))),
+      ),
+    );
+    tester.state<NavigatorState>(find.byType(Navigator)).push(
+      MaterialPageRoute(
+        builder: (_) => BatchRewriteScreen(
+          notes: rows,
+          prompt: RewritePrompt.defaults.first,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // The fake streamed — the fallback resolved a client — and the item
+    // reached its ready state instead of hanging or erroring.
+    expect(find.text('Ready to review'), findsOneWidget);
+    expect(find.textContaining('No LLM provider configured'), findsNothing);
+  });
 }

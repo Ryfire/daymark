@@ -373,4 +373,46 @@ void main() {
     expect(reverted.editedAt, 0);
     expect(reverted.originalContent, isNull);
   });
+
+  testWidgets('cold start streams via the fallback client, no hang',
+      (tester) async {
+    // Regression: the screen used to await the watched config stream on a
+    // cold start, but with zero listeners Riverpod pauses that keep-alive
+    // stream — the await hung and the screen sat on "Rewriting…" forever
+    // until a Settings visit resumed it. It must fall back to the one-shot
+    // client provider instead.
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final fake = FakeRewriteClient();
+    final container = ProviderContainer(
+      overrides: [
+        databaseProvider.overrideWithValue(db),
+        llmClientFallbackProvider
+            .overrideWith((ref) => Future<LlmClient?>.value(fake)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final n = note('n1', 'sitter thu 6-10pm - dinner money on counter', 1000);
+    await db.into(db.notes).insert(n);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(key: Key('home'))),
+      ),
+    );
+    tester
+        .state<NavigatorState>(find.byType(Navigator))
+        .push(MaterialPageRoute(
+          builder: (_) =>
+              NoteRewriteScreen(note: n, prompt: RewritePrompt.defaults.first),
+        ));
+    await tester.pumpAndSettle();
+
+    // The fake streamed — the fallback resolved a client without any
+    // settings visit — and the unconfigured error never appeared.
+    expect(find.textContaining('Dinner money on counter'), findsOneWidget);
+    expect(find.text('No LLM provider configured'), findsNothing);
+  });
 }

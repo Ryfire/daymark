@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:daymark/data/settings_repository.dart';
 import 'package:daymark/db/database.dart';
+import 'package:daymark/llm/llm_config.dart';
 
 void main() {
   late AppDatabase db;
@@ -26,6 +27,24 @@ void main() {
 
   test('missing key reads null', () async {
     expect(await repo.getString('absent'), isNull);
+  });
+
+  test('getLlmConfig round-trips the stored JSON', () async {
+    await repo.setString(
+      LlmConfig.settingsKey,
+      LlmConfig(baseUrl: 'http://x:1/v1', apiKey: 'k', model: 'm')
+          .toJsonString(),
+    );
+    expect(
+      await repo.getLlmConfig(),
+      LlmConfig(baseUrl: 'http://x:1/v1', apiKey: 'k', model: 'm'),
+    );
+  });
+
+  test('getLlmConfig is null when absent or corrupt', () async {
+    expect(await repo.getLlmConfig(), isNull);
+    await repo.setString(LlmConfig.settingsKey, '{not json');
+    expect(await repo.getLlmConfig(), isNull);
   });
 
   test('watchString emits the stored value', () async {

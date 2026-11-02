@@ -40,7 +40,7 @@ class _NoteRewriteScreenState extends ConsumerState<NoteRewriteScreen> {
   @override
   void initState() {
     super.initState();
-    _start();
+    unawaited(_start());
   }
 
   @override
@@ -52,8 +52,16 @@ class _NoteRewriteScreenState extends ConsumerState<NoteRewriteScreen> {
   bool get _hasResult =>
       !_streaming && _error == null && _text.trim().isNotEmpty;
 
-  void _start() {
-    final client = ref.read(llmClientProvider);
+  Future<void> _start() async {
+    var client = ref.read(llmClientProvider);
+    if (client == null) {
+      // Cold start: the watched config stream has not emitted yet — and
+      // awaiting it here would hang, because with zero listeners Riverpod
+      // pauses the keep-alive stream. The one-shot fallback reads the
+      // database instead; its future always completes.
+      client = await ref.read(llmClientFallbackProvider.future);
+      if (!mounted) return;
+    }
     if (client == null) {
       setState(() {
         _streaming = false;

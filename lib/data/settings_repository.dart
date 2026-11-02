@@ -1,4 +1,5 @@
 import '../db/database.dart';
+import '../llm/llm_config.dart';
 
 /// Typed key-value access over the AppSettings table.
 class SettingsRepository {
@@ -18,6 +19,13 @@ class SettingsRepository {
           AppSettingsCompanion.insert(key: key, value: value),
         );
   }
+
+  /// Typed one-shot read of the provider config. Unlike the watched
+  /// stream — which Riverpod pauses when nothing listens — this plain
+  /// database read always completes, making it safe for imperative
+  /// cold-start flows such as the rewrite screens.
+  Future<LlmConfig?> getLlmConfig() async =>
+      LlmConfig.fromJsonString(await getString(LlmConfig.settingsKey));
 
   /// Live-updating string value; emits null when the key is absent.
   Stream<String?> watchString(String key) {

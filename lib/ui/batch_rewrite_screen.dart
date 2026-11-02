@@ -74,7 +74,7 @@ class _BatchRewriteScreenState extends ConsumerState<BatchRewriteScreen> {
   @override
   void initState() {
     super.initState();
-    _startNext();
+    unawaited(_startNext());
   }
 
   @override
@@ -85,7 +85,7 @@ class _BatchRewriteScreenState extends ConsumerState<BatchRewriteScreen> {
 
   /// Streams the first note still awaiting a decision; when every note
   /// is decided, simply refreshes so the send bar can appear.
-  void _startNext() {
+  Future<void> _startNext() async {
     _sub?.cancel();
     final index = _items.indexWhere(
       (item) => item.status == _ItemStatus.pending,
@@ -94,8 +94,16 @@ class _BatchRewriteScreenState extends ConsumerState<BatchRewriteScreen> {
       setState(() {});
       return;
     }
+    var client = ref.read(llmClientProvider);
+    if (client == null) {
+      // Cold start: the watched config stream has not emitted yet — and
+      // awaiting it here would hang, because with zero listeners Riverpod
+      // pauses the keep-alive stream. The one-shot fallback reads the
+      // database instead; its future always completes.
+      client = await ref.read(llmClientFallbackProvider.future);
+      if (!mounted) return;
+    }
     final item = _items[index];
-    final client = ref.read(llmClientProvider);
     setState(() {
       item
         ..status = _ItemStatus.streaming
@@ -155,17 +163,17 @@ class _BatchRewriteScreenState extends ConsumerState<BatchRewriteScreen> {
     await saveNoteAsNew(db, item.text.trim());
     if (!mounted) return;
     setState(() => item.status = _ItemStatus.kept);
-    _startNext();
+    unawaited(_startNext());
   }
 
   void _skip(_Item item) {
     setState(() => item.status = _ItemStatus.skipped);
-    _startNext();
+    unawaited(_startNext());
   }
 
   void _retry(_Item item) {
     setState(() => item.status = _ItemStatus.pending);
-    _startNext();
+    unawaited(_startNext());
   }
 
   Future<void> _sendKept(int itemIndex) async {

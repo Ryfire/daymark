@@ -324,7 +324,14 @@ if (last.role == 'assistant' && last.content.isEmpty) {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, _) => Center(child: Text('Could not load notes: $error')),
         data: (notes) {
-          if (ref.watch(llmConfigProvider).value == null) {
+          // Cold-start race: the config watch stream is briefly still
+          // loading after a restart. Spinner until it lands; the prompt
+          // only once it has loaded and really is null.
+          final configAsync = ref.watch(llmConfigProvider);
+          if (configAsync.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (configAsync.value == null) {
             return _CenterPrompt(
               icon: Icons.settings_outlined,
               title: 'No LLM provider configured',

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
@@ -27,7 +29,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _saving = false;
   bool _testing = false;
   bool _loadingModels = false;
-  List<String> _models = const [];
   String? _modelFetchError;
 
   @override
@@ -105,20 +106,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
     );
+    var models = const <String>[];
+    String? fetchError;
     try {
-      final models = await client.listModels();
-      if (!mounted) return;
-      setState(() => _models = models);
+      models = await client.listModels();
     } on LlmApiException catch (e) {
-      if (!mounted) return;
-      setState(() => _modelFetchError = e.message);
+      fetchError = e.message;
     } on LlmNetworkException catch (e) {
-      if (!mounted) return;
-      setState(() => _modelFetchError = e.message);
+      fetchError = e.message;
+    } catch (_) {
+      fetchError = 'Could not fetch models';
     } finally {
       client.close();
-      if (mounted) setState(() => _loadingModels = false);
+      if (mounted) {
+        setState(() {
+          _loadingModels = false;
+          _modelFetchError =
+              fetchError ?? (models.isEmpty ? 'No models listed' : null);
+        });
+      }
     }
+    if (fetchError != null || models.isEmpty || !mounted) return;
+    // A searchable sheet instead of an inline chip list: it scales to
+    // OpenRouter-sized catalogs (300+ ids) and puts the chosen id straight
+    // into the Model field on tap — no scrolling back up to confirm.
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) => _ModelPickerSheet(
+        models: models,
+        currentModel: _modelController.text.trim(),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    setState(() => _modelController.text = selected);
   }
 
   Future<void> _testConnection() async {
@@ -263,7 +284,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     final config = ref.watch(llmConfigProvider).value;
-    if (!_seeded && config != null) _seedFromConfig(config);
+    // Seed only while the form is untouched, so an emission racing the
+    // user's typing can never clobber it.
+    if (!_seeded &&
+        config != null &&
+        _baseUrlController.text.isEmpty &&
+        _apiKeyController.text.isEmpty &&
+        _modelController.text.isEmpty) {
+      _seedFromConfig(config);
+    }
     final prompts = ref.watch(rewritePromptsProvider).value;
 
     return Scaffold(
@@ -353,21 +382,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   color: Theme.of(context).colorScheme.error,
                   fontSize: 12,
                 ),
-              ),
-            ],
-            if (_models.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 4,
-                children: [
-                  for (final model in _models)
-                    ActionChip(
-                      label: Text(model),
-                      onPressed: () =>
-                          setState(() => _modelController.text = model),
-                    ),
-                ],
               ),
             ],
             const SizedBox(height: 24),
@@ -464,6 +478,109 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               onPressed: _editPrompt,
               icon: const Icon(Icons.add),
               label: const Text('Add prompt'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Searchable model chooser shown after a successful Fetch. Virtualized
+/// (ListView.builder) and sorted, so OpenRouter-sized lists (300+ ids)
+/// scroll smoothly; returns the chosen id, or null when dismissed.
+class _ModelPickerSheet extends StatefulWidget {
+  const _ModelPickerSheet({
+    required this.models,
+    required this.currentModel,
+  });
+
+  final List<String> models;
+  final String currentModel;
+
+  @override
+  State<_ModelPickerSheet> createState() => _ModelPickerSheetState();
+}
+
+class _ModelPickerSheetState extends State<_ModelPickerSheet> {
+  final _searchController = TextEditingController();
+  late final List<String> _sorted = [...widget.models]
+    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+  String _query = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final media = MediaQuery.of(context);
+    // Shrink for the keyboard and status bar so the list is never hidden
+    // behind either; floor for very short windows.
+    final height = math.max(
+      240.0,
+      math.min(
+        media.size.height * 0.85,
+        media.size.height - media.viewInsets.bottom - media.padding.top,
+      ),
+    );
+    final query = _query.trim().toLowerCase();
+    final filtered = query.isEmpty
+        ? _sorted
+        : _sorted
+            .where((model) => model.toLowerCase().contains(query))
+            .toList();
+    return Padding(
+      padding: EdgeInsets.only(
+        top: media.padding.top,
+        bottom: media.viewInsets.bottom,
+      ),
+      child: SizedBox(
+        height: height,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: 'Search models',
+                  prefixIcon: const Icon(Icons.search),
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: query.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _query = '');
+                          },
+                        ),
+                ),
+                onChanged: (value) => setState(() => _query = value),
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? const Center(child: Text('No models match'))
+                  : ListView.builder(
+                      itemCount: filtered.length,
+                      itemBuilder: (context, index) {
+                        final model = filtered[index];
+                        return ListTile(
+                          title: Text(model),
+                          trailing: model == widget.currentModel
+                              ? const Icon(Icons.check)
+                              : null,
+                          onTap: () => Navigator.of(context).pop(model),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
