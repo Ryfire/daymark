@@ -10,6 +10,25 @@ local mirror of them on a day-grouped timeline, lets you interrogate your
 own notes with an LLM you choose and host, and can tidy up the shorthand
 you jotted down.
 
+## Why two apps?
+
+Because they do different jobs at different moments. JotLock is for the ten
+seconds you have — fast, messy capture, no thinking required. Daymark is for
+the ten minutes you don't — reading back, asking, cleaning up. Splitting
+them keeps capture instant and processing deliberate — use either as often
+as you like.
+
+The split is also the safety: the AI never writes into the source of truth
+without a human confirming it. Daymark is a rebuildable mirror; JotLock is
+the ledger. Delete Daymark tomorrow and you lose nothing — re-import the
+backup and it's all back.
+
+And only Daymark ever touches an LLM endpoint. JotLock works fully offline,
+forever.
+
+**Capture fast and messy in JotLock. Clean it up when you get time in
+Daymark.**
+
 ## Screenshots
 
 | Library | Ask | Rewrite | Batch rewrite |
