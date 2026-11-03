@@ -53,37 +53,6 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final note = widget.note;
-    final created = DateTime.fromMillisecondsSinceEpoch(note.createdAt);
-    final sourceLine = note.source == 'daymark_ai'
-        ? 'Created in Daymark'
-        : !_batchLoaded
-            ? 'JotLock backup'
-            : 'JotLock backup'
-                '${_batch?.fileName == null ? '' : ' · ${_batch!.fileName}'}';
-    final metaEntries = <(String, String)>[
-      ('Created', formatFull(created)),
-      if (note.editedAt > 0)
-        (
-          'Edited',
-          formatFull(DateTime.fromMillisecondsSinceEpoch(note.editedAt))
-        ),
-      (
-        'Reminder',
-        note.hasReminder
-            ? '${formatShort(note.reminderTime)}'
-                '${note.isRecurring ? ' · ${repeatLabel(note.repeatDays)}' : ''}'
-                '${note.reminderSilent ? ' · silent' : ''}'
-            : '—'
-      ),
-      ('Priority', note.colorIndex > 0 ? _colorName(note.colorIndex) : '—'),
-      ('Pinned', note.pinned ? 'Yes' : 'No'),
-      ('Done', note.done ? 'Yes' : 'No'),
-      ('Source', sourceLine),
-      (
-        'Imported',
-        formatFull(DateTime.fromMillisecondsSinceEpoch(note.importedAt))
-      ),
-    ];
 
     return Scaffold(
       appBar: AppBar(
@@ -92,6 +61,7 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
           PopupMenuButton<String>(
             tooltip: 'Note options',
             onSelected: (value) {
+              if (value == 'details') _showDetails(note);
               if (value == 'copy') _copy(note);
               if (value == 'share') _share(note);
               if (value == 'jotlock') _sendToJotlock(note);
@@ -99,6 +69,16 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
               if (value == 'revert') _confirmRevert(note);
             },
             itemBuilder: (context) => [
+              // View details first: the full note text is the page body,
+              // so the metadata (created, reminder, source, …) lives one
+              // tap away in the same three-dot menu used everywhere else.
+              PopupMenuItem(
+                value: 'details',
+                child: ListTile(
+                  leading: const Icon(Icons.info_outline),
+                  title: const Text('View details'),
+                ),
+              ),
               // Share actions live on this screen for Daymark-created
               // notes: a rewrite saved as new can be handed on (JotLock,
               // system sheet, clipboard) right from its detail view.
@@ -154,29 +134,80 @@ class _NoteDetailScreenState extends ConsumerState<NoteDetailScreen> {
             color: noteCardColor(note.colorIndex, scheme),
             child: Padding(
               padding: const EdgeInsets.all(16),
-              child: ReadOnlyChecklist(text: note.content, strikeAll: note.done),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Column(
-                children: [
-                  for (final (label, value) in metaEntries)
-                    ListTile(
-                      dense: true,
-                      title: Text(label),
-                      trailing: Text(
-                        value,
-                        style: TextStyle(color: scheme.onSurfaceVariant),
-                      ),
-                    ),
-                ],
+              child: ReadOnlyChecklist(
+                text: note.content,
+                strikeAll: note.done,
+                clampLines: false,
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Opens the metadata that used to sit in a permanent second card:
+  /// created/edited times, reminder, priority, flags and source. In a
+  /// swipe-dismissible bottom sheet so the note text keeps the whole
+  /// screen — details are on demand, not always in the way.
+  void _showDetails(NoteRow note) {
+    final scheme = Theme.of(context).colorScheme;
+    final created = DateTime.fromMillisecondsSinceEpoch(note.createdAt);
+    final sourceLine = note.source == 'daymark_ai'
+        ? 'Created in Daymark'
+        : !_batchLoaded
+            ? 'JotLock backup'
+            : 'JotLock backup'
+                '${_batch?.fileName == null ? '' : ' · ${_batch!.fileName}'}';
+    final metaEntries = <(String, String)>[
+      ('Created', formatFull(created)),
+      if (note.editedAt > 0)
+        (
+          'Edited',
+          formatFull(DateTime.fromMillisecondsSinceEpoch(note.editedAt))
+        ),
+      (
+        'Reminder',
+        note.hasReminder
+            ? '${formatShort(note.reminderTime)}'
+                '${note.isRecurring ? ' · ${repeatLabel(note.repeatDays)}' : ''}'
+                '${note.reminderSilent ? ' · silent' : ''}'
+            : '—'
+      ),
+      ('Priority', note.colorIndex > 0 ? _colorName(note.colorIndex) : '—'),
+      ('Pinned', note.pinned ? 'Yes' : 'No'),
+      ('Done', note.done ? 'Yes' : 'No'),
+      ('Source', sourceLine),
+      (
+        'Imported',
+        formatFull(DateTime.fromMillisecondsSinceEpoch(note.importedAt))
+      ),
+    ];
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Text(
+                'Note details',
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+            ),
+            for (final (label, value) in metaEntries)
+              ListTile(
+                dense: true,
+                title: Text(label),
+                trailing: Text(
+                  value,
+                  style: TextStyle(color: scheme.onSurfaceVariant),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

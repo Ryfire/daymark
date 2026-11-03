@@ -90,18 +90,23 @@ class NoteCard extends StatelessWidget {
 /// Renders a note's lines interleaved: checklist items as checkbox rows,
 /// everything else as plain text lines. Read-only — checked state comes
 /// from the note text itself. [maxRows] caps the render with a "+N more"
-/// hint; pass null to show everything (note detail screen).
+/// hint; pass null to show everything (note detail screen). [clampLines]
+/// ellipsizes each line at 2 visual lines when true (compact cards);
+/// when false lines wrap fully — the whole-note reader page passes false
+/// so long notes are readable without exporting or copying.
 class ReadOnlyChecklist extends StatelessWidget {
   const ReadOnlyChecklist({
     super.key,
     required this.text,
     this.maxRows,
     this.strikeAll = false,
+    this.clampLines = true,
   });
 
   final String text;
   final int? maxRows;
   final bool strikeAll;
+  final bool clampLines;
 
   @override
   Widget build(BuildContext context) {
@@ -122,8 +127,9 @@ class ReadOnlyChecklist extends StatelessWidget {
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(
               lines[i],
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+              maxLines: clampLines ? 2 : null,
+              overflow:
+                  clampLines ? TextOverflow.ellipsis : null,
               style: strikeAll
                   ? TextStyle(
                       decoration: TextDecoration.lineThrough,
@@ -149,8 +155,9 @@ class ReadOnlyChecklist extends StatelessWidget {
             Expanded(
               child: Text(
                 item.label,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                maxLines: clampLines ? 2 : null,
+                overflow:
+                    clampLines ? TextOverflow.ellipsis : null,
                 style: strike
                     ? TextStyle(
                         decoration: TextDecoration.lineThrough,
