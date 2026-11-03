@@ -1,0 +1,3 @@
+New: reader-first note page — open any note and read the whole thing,
+without truncation. The metadata that used to fill half the screen now
+lives behind ⋮ → "View details", a swipe-dismissible bottom sheet.

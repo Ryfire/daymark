@@ -1,0 +1,44 @@
+Daymark is the processing half of the JotLock capture stream. JotLock
+captures fast and messy — from the lock screen, no thinking required.
+Daymark is where you spend the ten minutes you don't have while capturing:
+reading back, asking, and cleaning up. Import JotLock's JSON backups and
+they appear on a day-grouped timeline, rendered exactly as JotLock
+renders them.
+
+Features:
+
+- Read every note in full — tapping a note opens a clean reader page with
+  the complete text; long notes wrap and scroll without any truncation
+- Grounded ask-over-notes — the app picks the relevant notes, streams an
+  answer that cites what it used ([n1], [n2]…), and maps each citation
+  back to the real note; if the notes don't contain the answer, the model
+  is instructed to say so instead of guessing
+- A chat that stays put — the Ask conversation survives backing out,
+  switching apps, even a restart, and is never cleared as a side effect
+- Reads your notes aloud — system TTS with autoplay and a speed slider;
+  audio keeps reading even after you back out or switch apps
+- Quick rewrite — long-press a note and pick a prompt: improve
+  readability, fix typos & grammar, turn it into a checklist, or
+  summarize. The original is always kept and revertable
+- Batch rewrite sessions — apply one prompt to any number of notes and
+  review each streamed result; originals are never overwritten
+- Duplicate triage — find exact and near-duplicate notes and delete
+  extra copies behind a confirmation
+- Share-sheet intake — share a JotLock backup straight into Daymark;
+  re-shares merge by note id so only what's new gets imported
+- Day-grouped library — search, checklist rendering, priority-color
+  tints, pins and reminders shown exactly as JotLock renders them
+- Bring your own provider — one generic OpenAI-compatible endpoint: base
+  URL, optional API key, model picker fetched from /v1/models, and a test
+  connection. Works with Ollama, LM Studio, a llama.cpp server (LAN with
+  cleartext HTTP supported), or any cloud gateway. No presets by design
+- One-way write — "Send to JotLock" hands a rewrite over as a NEW note
+  for you to confirm in JotLock; Daymark never modifies or deletes
+  anything in JotLock
+
+Free and open source (MIT), ad-free, no accounts, no analytics. Notes
+live in a local SQLite database on your device. The only network traffic
+is the text of the notes you select for a question or rewrite, sent to
+the LLM endpoint YOU configured — there is no bundled AI service and no
+default provider. Delete Daymark tomorrow and you lose nothing:
+re-import the backup and it's all back.
